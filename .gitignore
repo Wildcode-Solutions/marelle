@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.wrangler/
+.env
+.env.*
+!.env.example
+.dev.vars
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Capacitor / native builds
+android/.gradle/
+android/local.properties
+android/**/build/
+ios/App/DerivedData/
