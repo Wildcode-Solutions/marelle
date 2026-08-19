@@ -5,7 +5,7 @@
   "compatibility_date": "2026-08-18",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "ALLOWED_ORIGINS": ""
+    "ALLOWED_ORIGINS": "https://marelle.wildcode-solutions.com"
   },
   "assets": {
     "directory": "./dist",
