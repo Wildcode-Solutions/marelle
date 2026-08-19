@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "marelle-db",
-      "database_id": "b9852a8e-3fb3-43ae-8b0d-ffc16ed81784",
+      "database_id": "3405d09c-2618-4f34-a86a-b54b96101f35",
       "migrations_dir": "./migrations"
     }
   ],
