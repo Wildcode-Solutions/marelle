@@ -1,27 +1,144 @@
-import { HttpError, json, preflight } from "./lib/http";
+import { requireAdminUser, requireSessionUser } from "./lib/auth";
+import { applyCors, assertAllowedOrigin, HttpError, json, preflight } from "./lib/http";
+import {
+  adminCatalog,
+  adminQuestions,
+  adminThemes,
+  createAdminQuestion,
+  createAdminTheme,
+  updateAdminQuestion,
+  updateAdminTheme,
+} from "./routes/admin-content";
+import { adminUsers, updateAdminUser } from "./routes/admin-users";
+import { adminOverview } from "./routes/admin";
+import { login, logout, me, register, schoolLevels, updateProfile } from "./routes/auth";
 import { dashboard } from "./routes/dashboard";
 import { subjects } from "./routes/subjects";
 
+function methodNotAllowed(request: Request, methods: string[]): Response {
+  return json(request, { error: "Method not allowed" }, {
+    status: 405,
+    headers: { Allow: methods.join(", ") },
+  });
+}
+
+function pathIdentifier(pathname: string, prefix: string): string | null {
+  if (!pathname.startsWith(prefix)) return null;
+  const encodedId = pathname.slice(prefix.length);
+  if (!encodedId || encodedId.includes("/")) return null;
+
+  try {
+    return decodeURIComponent(encodedId);
+  } catch {
+    throw new HttpError(400, "L’identifiant de la ressource est invalide.");
+  }
+}
+
 async function handleRequest(request: Request, env: Env): Promise<Response> {
-  if (request.method === "OPTIONS") {
-    return preflight(request);
+  if (request.method === "OPTIONS") return preflight(request, env.ALLOWED_ORIGINS);
+  assertAllowedOrigin(request, env.ALLOWED_ORIGINS);
+
+  const { pathname } = new URL(request.url);
+  const adminUserId = pathIdentifier(pathname, "/api/admin/users/");
+  if (adminUserId !== null) {
+    if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+    const actor = await requireAdminUser(request, env);
+    return updateAdminUser(request, env, actor, adminUserId);
   }
 
-  const url = new URL(request.url);
-
-  if (request.method !== "GET") {
-    return json(request, { error: "Method not allowed" }, { status: 405 });
+  const adminThemeId = pathIdentifier(pathname, "/api/admin/themes/");
+  if (adminThemeId !== null) {
+    if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+    await requireAdminUser(request, env);
+    return updateAdminTheme(request, env, adminThemeId);
   }
 
-  switch (url.pathname) {
-    case "/api/health": {
+  const adminQuestionId = pathIdentifier(pathname, "/api/admin/questions/");
+  if (adminQuestionId !== null) {
+    if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+    await requireAdminUser(request, env);
+    return updateAdminQuestion(request, env, adminQuestionId);
+  }
+
+  switch (pathname) {
+    case "/api/health":
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
       await env.DB.prepare("SELECT 1").first();
       return json(request, { status: "ok", services: { database: "ok" } });
+
+    case "/api/auth/register":
+      return request.method === "POST"
+        ? register(request, env)
+        : methodNotAllowed(request, ["POST"]);
+
+    case "/api/auth/login":
+      return request.method === "POST"
+        ? login(request, env)
+        : methodNotAllowed(request, ["POST"]);
+
+    case "/api/auth/logout":
+      return request.method === "POST"
+        ? logout(request, env)
+        : methodNotAllowed(request, ["POST"]);
+
+    case "/api/auth/me": {
+      if (request.method === "GET") return me(request, env);
+      if (request.method === "PATCH") {
+        const user = await requireSessionUser(request, env);
+        return updateProfile(request, env, user);
+      }
+      return methodNotAllowed(request, ["GET", "PATCH"]);
     }
-    case "/api/dashboard":
-      return dashboard(request, env);
+
+    case "/api/school-levels":
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireSessionUser(request, env);
+      return schoolLevels(request, env);
+
+    case "/api/dashboard": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return dashboard(request, env, user.id);
+    }
+
+    case "/api/admin/overview":
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireAdminUser(request, env);
+      return adminOverview(request, env);
+
+    case "/api/admin/users":
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireAdminUser(request, env);
+      return adminUsers(request, env);
+
+    case "/api/admin/catalog":
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireAdminUser(request, env);
+      return adminCatalog(request, env);
+
+    case "/api/admin/themes":
+      if (request.method !== "GET" && request.method !== "POST") {
+        return methodNotAllowed(request, ["GET", "POST"]);
+      }
+      await requireAdminUser(request, env);
+      return request.method === "GET"
+        ? adminThemes(request, env)
+        : createAdminTheme(request, env);
+
+    case "/api/admin/questions":
+      if (request.method !== "GET" && request.method !== "POST") {
+        return methodNotAllowed(request, ["GET", "POST"]);
+      }
+      await requireAdminUser(request, env);
+      return request.method === "GET"
+        ? adminQuestions(request, env)
+        : createAdminQuestion(request, env);
+
     case "/api/subjects":
-      return subjects(request, env);
+      return request.method === "GET"
+        ? subjects(request, env)
+        : methodNotAllowed(request, ["GET"]);
+
     default:
       return json(request, { error: "Not found" }, { status: 404 });
   }
@@ -30,10 +147,14 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
-      return await handleRequest(request, env);
+      return applyCors(await handleRequest(request, env), request, env.ALLOWED_ORIGINS);
     } catch (error) {
       if (error instanceof HttpError) {
-        return json(request, { error: error.message }, { status: error.status });
+        return applyCors(
+          json(request, { error: error.message }, { status: error.status }),
+          request,
+          env.ALLOWED_ORIGINS,
+        );
       }
 
       console.error(
@@ -45,7 +166,11 @@ export default {
         }),
       );
 
-      return json(request, { error: "Internal server error" }, { status: 500 });
+      return applyCors(
+        json(request, { error: "Internal server error" }, { status: 500 }),
+        request,
+        env.ALLOWED_ORIGINS,
+      );
     }
   },
 } satisfies ExportedHandler<Env>;

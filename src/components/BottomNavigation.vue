@@ -1,14 +1,25 @@
 <script setup lang="ts">
-const items = [
+import { computed } from "vue";
+
+import { auth } from "@/services/auth";
+
+const items = computed(() => [
   { to: "/", label: "Accueil", icon: "⌂" },
   { to: "/matieres", label: "Matières", icon: "▦" },
   { to: "/progression", label: "Progrès", icon: "↗" },
   { to: "/profil", label: "Profil", icon: "☺" },
-] as const;
+  ...(auth.user.value?.role === "admin"
+    ? [{ to: "/admin", label: "Admin", icon: "⚙" }]
+    : []),
+]);
 </script>
 
 <template>
-  <nav class="bottom-nav" aria-label="Navigation principale">
+  <nav
+    class="bottom-nav"
+    :class="{ 'bottom-nav--admin': auth.user.value?.role === 'admin' }"
+    aria-label="Navigation principale"
+  >
     <RouterLink
       v-for="item in items"
       :key="item.to"

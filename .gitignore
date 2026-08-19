@@ -13,6 +13,7 @@ npm-debug.log*
 
 # Editors
 .idea/
+.history/
 .vscode/*
 !.vscode/extensions.json
 

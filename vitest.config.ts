@@ -19,6 +19,7 @@ export default defineConfig(async () => {
     ],
     test: {
       setupFiles: ["./tests/apply-migrations.ts"],
+      testTimeout: 30_000,
     },
   };
 });

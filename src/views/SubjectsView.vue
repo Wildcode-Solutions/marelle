@@ -4,6 +4,7 @@ import { onMounted, ref } from "vue";
 import SubjectGrid from "@/components/SubjectGrid.vue";
 import ViewHeader from "@/components/ViewHeader.vue";
 import { api } from "@/services/api";
+import { auth } from "@/services/auth";
 import type { SubjectSummary } from "@/types/domain";
 
 const subjects = ref<SubjectSummary[]>([]);
@@ -12,7 +13,7 @@ const hasError = ref(false);
 
 onMounted(async () => {
   try {
-    subjects.value = await api.subjects();
+    subjects.value = await api.subjects(auth.user.value?.schoolLevel.id);
   } catch {
     hasError.value = true;
   } finally {
@@ -24,7 +25,7 @@ onMounted(async () => {
 <template>
   <div class="page inner-page">
     <ViewHeader
-      eyebrow="Parcours de 6e"
+      :eyebrow="`Parcours de ${auth.user.value?.schoolLevel.label ?? '6e'}`"
       title="Choisis une matière"
       description="Avance chapitre par chapitre, à ton rythme."
     />

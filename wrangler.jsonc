@@ -2,8 +2,11 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "marelle",
   "main": "./worker/index.ts",
-  "compatibility_date": "2026-08-17",
+  "compatibility_date": "2026-08-18",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ALLOWED_ORIGINS": ""
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -14,6 +17,7 @@
     {
       "binding": "DB",
       "database_name": "marelle-db",
+      "database_id": "b9852a8e-3fb3-43ae-8b0d-ffc16ed81784",
       "migrations_dir": "./migrations"
     }
   ],

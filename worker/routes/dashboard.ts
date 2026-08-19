@@ -31,8 +31,6 @@ interface SubjectRow {
   chapter_count: number;
 }
 
-const DEMO_USER_ID = "demo-user";
-
 function isDailyProgressRow(value: unknown): value is DailyProgressRow {
   if (typeof value !== "object" || value === null) return false;
 
@@ -69,7 +67,11 @@ function isSubjectRow(value: unknown): value is SubjectRow {
   );
 }
 
-export async function dashboard(request: Request, env: Env): Promise<Response> {
+export async function dashboard(
+  request: Request,
+  env: Env,
+  userId: string,
+): Promise<Response> {
   const user = await env.DB.prepare(
     `SELECT
       u.id,
@@ -87,12 +89,10 @@ export async function dashboard(request: Request, env: Env): Promise<Response> {
     JOIN school_levels l ON l.id = u.school_level_id
     WHERE u.id = ?1`,
   )
-    .bind(DEMO_USER_ID)
+    .bind(userId)
     .first<UserRow>();
 
-  if (!user) {
-    throw new HttpError(404, "Demo user not found. Run the D1 migrations first.");
-  }
+  if (!user) throw new HttpError(404, "Utilisateur introuvable.");
 
   const batchResults = await env.DB.batch([
     env.DB.prepare(

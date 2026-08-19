@@ -5,7 +5,7 @@ CREATE TABLE school_levels (
   label TEXT NOT NULL,
   stage TEXT NOT NULL CHECK (stage IN ('college', 'lycee')),
   position INTEGER NOT NULL UNIQUE
-) STRICT;
+);
 
 CREATE TABLE subjects (
   id TEXT PRIMARY KEY,
@@ -16,7 +16,7 @@ CREATE TABLE subjects (
   color TEXT NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-) STRICT;
+);
 
 CREATE TABLE chapters (
   id TEXT PRIMARY KEY,
@@ -29,7 +29,7 @@ CREATE TABLE chapters (
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (subject_id, school_level_id, slug)
-) STRICT;
+);
 
 CREATE TABLE questions (
   id TEXT PRIMARY KEY,
@@ -43,7 +43,7 @@ CREATE TABLE questions (
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-) STRICT;
+);
 
 CREATE TABLE answer_choices (
   id TEXT PRIMARY KEY,
@@ -52,7 +52,7 @@ CREATE TABLE answer_choices (
   is_correct INTEGER NOT NULL DEFAULT 0 CHECK (is_correct IN (0, 1)),
   position INTEGER NOT NULL DEFAULT 0,
   UNIQUE (question_id, position)
-) STRICT;
+);
 
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
@@ -68,7 +68,7 @@ CREATE TABLE users (
   last_activity_on TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-) STRICT;
+);
 
 CREATE TABLE learning_sessions (
   id TEXT PRIMARY KEY,
@@ -81,7 +81,7 @@ CREATE TABLE learning_sessions (
   correct_answers INTEGER NOT NULL DEFAULT 0 CHECK (correct_answers >= 0),
   total_answers INTEGER NOT NULL DEFAULT 0 CHECK (total_answers >= 0),
   xp_earned INTEGER NOT NULL DEFAULT 0 CHECK (xp_earned >= 0)
-) STRICT;
+);
 
 CREATE TABLE user_answers (
   id TEXT PRIMARY KEY,
@@ -93,7 +93,7 @@ CREATE TABLE user_answers (
   is_correct INTEGER NOT NULL CHECK (is_correct IN (0, 1)),
   response_time_ms INTEGER CHECK (response_time_ms IS NULL OR response_time_ms >= 0),
   answered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-) STRICT;
+);
 
 CREATE TABLE user_question_progress (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -105,7 +105,7 @@ CREATE TABLE user_question_progress (
   last_answered_at TEXT,
   next_review_at TEXT,
   PRIMARY KEY (user_id, question_id)
-) STRICT;
+);
 
 CREATE TABLE daily_progress (
   id TEXT PRIMARY KEY,
@@ -117,7 +117,7 @@ CREATE TABLE daily_progress (
   correct_answers INTEGER NOT NULL DEFAULT 0 CHECK (correct_answers >= 0),
   goal_reached INTEGER NOT NULL DEFAULT 0 CHECK (goal_reached IN (0, 1)),
   UNIQUE (user_id, activity_date)
-) STRICT;
+);
 
 CREATE TABLE achievements (
   id TEXT PRIMARY KEY,
@@ -127,14 +127,14 @@ CREATE TABLE achievements (
   icon TEXT NOT NULL,
   xp_reward INTEGER NOT NULL DEFAULT 0 CHECK (xp_reward >= 0),
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
-) STRICT;
+);
 
 CREATE TABLE user_achievements (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   achievement_id TEXT NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
   unlocked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, achievement_id)
-) STRICT;
+);
 
 CREATE TABLE friendships (
   requester_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -144,7 +144,7 @@ CREATE TABLE friendships (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (requester_id, addressee_id),
   CHECK (requester_id <> addressee_id)
-) STRICT;
+);
 
 CREATE INDEX idx_chapters_level_subject ON chapters (school_level_id, subject_id, position);
 CREATE INDEX idx_questions_chapter_status ON questions (chapter_id, status, difficulty);
