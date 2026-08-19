@@ -84,7 +84,7 @@ describe("Marelle Worker API", () => {
     expect(storedUser?.password_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(storedUser?.password_hash).not.toContain(testPassword);
     expect(storedUser?.password_salt).toMatch(/^[0-9a-f]{32}$/);
-    expect(storedUser?.password_iterations).toBe(600_000);
+    expect(storedUser?.password_iterations).toBe(100_000);
 
     const meResponse = await request("/api/auth/me", {
       headers: { Cookie: registerCookie },

@@ -11,7 +11,7 @@ import { HttpError, json, readJsonObject } from "../lib/http";
 
 const FAKE_PASSWORD_DIGEST: PasswordDigest = {
   hash: "0000000000000000000000000000000000000000000000000000000000000000",
-  iterations: 600_000,
+  iterations: 100_000,
   salt: "000102030405060708090a0b0c0d0e0f",
 };
 
