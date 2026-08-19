@@ -1,0 +1,3 @@
+  npm run db:migrate:remote
+  npm run deploy
+  npm run dev
