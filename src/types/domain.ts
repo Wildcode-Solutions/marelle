@@ -34,6 +34,10 @@ export interface AdminOverview {
   };
   activeSessions: number;
   activeSubjects: number;
+  content: {
+    questions: number;
+    answers: number;
+  };
 }
 
 export interface Pagination {
@@ -67,15 +71,30 @@ export interface UpdateAdminUserInput {
 
 export interface AdminSubject {
   id: string;
+  slug: string;
   name: string;
   shortName: string;
   icon: string;
   color: string;
+  isActive: boolean;
+  themeCount: number;
+}
+
+export interface AdminSubjectInput {
+  name: string;
+  shortName: string;
+  icon: string;
+  color: string;
+  isActive: boolean;
+}
+
+export interface AdminSubjectsResponse {
+  subjects: AdminSubject[];
 }
 
 export interface AdminCatalog {
   schoolLevels: SchoolLevel[];
-  subjects: AdminSubject[];
+  subjects: Array<Pick<AdminSubject, "id" | "name" | "shortName" | "icon" | "color">>;
 }
 
 export interface AdminTheme {

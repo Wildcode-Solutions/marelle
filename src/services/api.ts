@@ -3,6 +3,9 @@ import type {
   AdminOverview,
   AdminQuestion,
   AdminQuestionInput,
+  AdminSubject,
+  AdminSubjectInput,
+  AdminSubjectsResponse,
   AdminTheme,
   AdminThemeInput,
   AdminThemesResponse,
@@ -88,6 +91,14 @@ export const api = {
     updateUser: (userId: string, input: UpdateAdminUserInput) =>
       patchJson<{ user: AdminUser }>(`/api/admin/users/${encodeURIComponent(userId)}`, input),
     catalog: () => requestJson<AdminCatalog>("/api/admin/catalog"),
+    subjects: () => requestJson<AdminSubjectsResponse>("/api/admin/subjects"),
+    createSubject: (input: AdminSubjectInput) =>
+      postJson<{ subject: AdminSubject }>("/api/admin/subjects", input),
+    updateSubject: (subjectId: string, input: AdminSubjectInput) =>
+      patchJson<{ subject: AdminSubject }>(
+        `/api/admin/subjects/${encodeURIComponent(subjectId)}`,
+        input,
+      ),
     themes: (offset = 0) =>
       requestJson<AdminThemesResponse>(`/api/admin/themes?offset=${offset}&limit=50`),
     createTheme: (input: AdminThemeInput) =>

@@ -156,6 +156,7 @@ describe("Marelle Worker API", () => {
         users: { total: 2, students: 1, admins: 1 },
         activeSessions: 1,
         activeSubjects: 6,
+        content: { questions: 2, answers: 6 },
       });
 
       const usersResponse = await request("/api/admin/users?role=student", {
@@ -218,6 +219,78 @@ describe("Marelle Worker API", () => {
           expect.objectContaining({ id: "mathematics", name: "Mathématiques" }),
         ]),
       );
+
+      const subjectsResponse = await request("/api/admin/subjects", {
+        headers: { Cookie: registerCookie },
+      });
+      expect(subjectsResponse.status).toBe(200);
+      await expect(subjectsResponse.json()).resolves.toMatchObject({
+        subjects: expect.arrayContaining([
+          expect.objectContaining({
+            id: "mathematics",
+            slug: "mathematiques",
+            name: "Mathématiques",
+            isActive: true,
+            themeCount: 2,
+          }),
+        ]),
+      });
+
+      const createSubjectResponse = await request("/api/admin/subjects", {
+        method: "POST",
+        headers: { Cookie: registerCookie },
+        body: JSON.stringify({
+          name: "Philosophie",
+          shortName: "Philo",
+          icon: "💡",
+          color: "#8B5CF6",
+          isActive: true,
+        }),
+      });
+      expect(createSubjectResponse.status).toBe(201);
+      const createdSubjectBody = await createSubjectResponse.json<{
+        subject: { id: string; slug: string };
+      }>();
+      expect(createdSubjectBody.subject.slug).toBe("philosophie");
+
+      const updateSubjectResponse = await request(
+        `/api/admin/subjects/${createdSubjectBody.subject.id}`,
+        {
+          method: "PATCH",
+          headers: { Cookie: registerCookie },
+          body: JSON.stringify({
+            name: "Philosophie et culture",
+            shortName: "Philo",
+            icon: "💡",
+            color: "#7C3AED",
+            isActive: false,
+          }),
+        },
+      );
+      expect(updateSubjectResponse.status).toBe(200);
+      await expect(updateSubjectResponse.json()).resolves.toMatchObject({
+        subject: {
+          id: createdSubjectBody.subject.id,
+          slug: "philosophie-et-culture",
+          name: "Philosophie et culture",
+          color: "#7C3AED",
+          isActive: false,
+          themeCount: 0,
+        },
+      });
+
+      const updatedSubjectsResponse = await request("/api/admin/subjects", {
+        headers: { Cookie: registerCookie },
+      });
+      await expect(updatedSubjectsResponse.json()).resolves.toMatchObject({
+        subjects: expect.arrayContaining([
+          expect.objectContaining({
+            id: createdSubjectBody.subject.id,
+            name: "Philosophie et culture",
+            isActive: false,
+          }),
+        ]),
+      });
 
       const themeResponse = await request("/api/admin/themes", {
         method: "POST",
@@ -311,6 +384,15 @@ describe("Marelle Worker API", () => {
       const questionsBody = await questionsResponse.json<{ questions: unknown[] }>();
       expect(questionsResponse.status).toBe(200);
       expect(questionsBody.questions).toHaveLength(2);
+
+      const updatedOverviewResponse = await request("/api/admin/overview", {
+        headers: { Cookie: registerCookie },
+      });
+      expect(updatedOverviewResponse.status).toBe(200);
+      await expect(updatedOverviewResponse.json()).resolves.toMatchObject({
+        activeSubjects: 6,
+        content: { questions: 4, answers: 9 },
+      });
     } finally {
       await env.DB.prepare("UPDATE users SET role = 'student' WHERE id = ?1")
         .bind(registerBody.user.id)

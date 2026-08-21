@@ -2,12 +2,13 @@
 import { onMounted, ref } from "vue";
 
 import AdminContentPanel from "@/components/admin/AdminContentPanel.vue";
+import AdminSubjectsPanel from "@/components/admin/AdminSubjectsPanel.vue";
 import AdminUsersPanel from "@/components/admin/AdminUsersPanel.vue";
 import ViewHeader from "@/components/ViewHeader.vue";
 import { api } from "@/services/api";
 import type { AdminOverview } from "@/types/domain";
 
-type AdminTab = "overview" | "users" | "content";
+type AdminTab = "overview" | "users" | "subjects" | "content";
 
 const activeTab = ref<AdminTab>("overview");
 const overview = ref<AdminOverview | null>(null);
@@ -28,6 +29,11 @@ async function loadOverview(): Promise<void> {
 }
 
 onMounted(loadOverview);
+
+async function openOverview(): Promise<void> {
+  activeTab.value = "overview";
+  await loadOverview();
+}
 </script>
 
 <template>
@@ -35,14 +41,14 @@ onMounted(loadOverview);
     <ViewHeader
       eyebrow="Administration"
       title="Espace administrateur"
-      description="Gère les comptes et construis le contenu pédagogique de Marelle."
+      description="Gère les comptes, les matières et le contenu pédagogique de Marelle."
     />
 
     <nav class="admin-tabs" aria-label="Sections d’administration">
       <button
         type="button"
         :class="{ 'admin-tabs__button--active': activeTab === 'overview' }"
-        @click="activeTab = 'overview'"
+        @click="openOverview"
       >
         <span aria-hidden="true">📊</span>
         Vue d’ensemble
@@ -54,6 +60,14 @@ onMounted(loadOverview);
       >
         <span aria-hidden="true">👥</span>
         Comptes
+      </button>
+      <button
+        type="button"
+        :class="{ 'admin-tabs__button--active': activeTab === 'subjects' }"
+        @click="activeTab = 'subjects'"
+      >
+        <span aria-hidden="true">📚</span>
+        Matières
       </button>
       <button
         type="button"
@@ -95,6 +109,16 @@ onMounted(loadOverview);
             <strong>{{ overview.activeSubjects }}</strong>
             <p>matières actives</p>
           </article>
+          <article class="admin-stat-card">
+            <span aria-hidden="true">❓</span>
+            <strong>{{ overview.content.questions }}</strong>
+            <p>questions créées</p>
+          </article>
+          <article class="admin-stat-card">
+            <span aria-hidden="true">💬</span>
+            <strong>{{ overview.content.answers }}</strong>
+            <p>réponses créées</p>
+          </article>
         </section>
 
         <section class="admin-panel">
@@ -117,6 +141,7 @@ onMounted(loadOverview);
     </section>
 
     <AdminUsersPanel v-else-if="activeTab === 'users'" />
+    <AdminSubjectsPanel v-else-if="activeTab === 'subjects'" />
     <AdminContentPanel v-else />
   </div>
 </template>

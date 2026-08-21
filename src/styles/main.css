@@ -897,7 +897,7 @@ h2,
 
 .admin-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
   margin: -0.6rem 0 1.25rem;
   padding: 0.35rem;
@@ -1053,6 +1053,7 @@ h2,
 }
 
 .admin-user-list,
+.admin-subject-list,
 .admin-theme-list,
 .admin-question-list {
   display: grid;
@@ -1068,6 +1069,64 @@ h2,
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: #fbfaff;
+}
+
+.admin-subject-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-left: 0.3rem solid var(--subject-color);
+  border-radius: 1rem;
+  background: #fbfaff;
+}
+
+.admin-subject-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: var(--primary-soft);
+  font-size: 1.15rem;
+}
+
+.admin-subject-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.admin-subject-copy strong,
+.admin-subject-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-subject-copy strong {
+  font-size: 0.82rem;
+}
+
+.admin-subject-copy span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.admin-subject-status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  color: #21694b;
+  background: #eaf9f2;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.admin-subject-status--inactive {
+  color: #775b2a;
+  background: #fff3d5;
 }
 
 .admin-user-avatar {
@@ -1218,6 +1277,32 @@ h2,
   width: 1.05rem;
   height: 1.05rem;
   accent-color: var(--primary);
+}
+
+.admin-color-control {
+  display: flex;
+  min-height: 3.15rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #dcd9e7;
+  border-radius: 0.9rem;
+  background: #fbfaff;
+}
+
+.admin-color-control input {
+  width: 2.4rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.admin-color-control output {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .admin-content-layout {
@@ -1476,6 +1561,10 @@ h2,
   }
 
   .admin-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-tabs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
@@ -1509,9 +1598,19 @@ h2,
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .admin-subject-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
   .admin-user-row > .compact-button,
-  .admin-user-row > .admin-row-actions {
+  .admin-user-row > .admin-row-actions,
+  .admin-subject-row > .admin-subject-status,
+  .admin-subject-row > .compact-button {
     grid-column: 1 / -1;
+  }
+
+  .admin-subject-row > .compact-button {
+    width: 100%;
   }
 
   .admin-row-actions .compact-button {

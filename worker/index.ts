@@ -10,6 +10,11 @@ import {
   updateAdminTheme,
 } from "./routes/admin-content";
 import { adminUsers, updateAdminUser } from "./routes/admin-users";
+import {
+  adminSubjects,
+  createAdminSubject,
+  updateAdminSubject,
+} from "./routes/admin-subjects";
 import { adminOverview } from "./routes/admin";
 import { login, logout, me, register, schoolLevels, updateProfile } from "./routes/auth";
 import { dashboard } from "./routes/dashboard";
@@ -58,6 +63,13 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
     await requireAdminUser(request, env);
     return updateAdminQuestion(request, env, adminQuestionId);
+  }
+
+  const adminSubjectId = pathIdentifier(pathname, "/api/admin/subjects/");
+  if (adminSubjectId !== null) {
+    if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+    await requireAdminUser(request, env);
+    return updateAdminSubject(request, env, adminSubjectId);
   }
 
   switch (pathname) {
@@ -115,6 +127,15 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
       await requireAdminUser(request, env);
       return adminCatalog(request, env);
+
+    case "/api/admin/subjects":
+      if (request.method !== "GET" && request.method !== "POST") {
+        return methodNotAllowed(request, ["GET", "POST"]);
+      }
+      await requireAdminUser(request, env);
+      return request.method === "GET"
+        ? adminSubjects(request, env)
+        : createAdminSubject(request, env);
 
     case "/api/admin/themes":
       if (request.method !== "GET" && request.method !== "POST") {
