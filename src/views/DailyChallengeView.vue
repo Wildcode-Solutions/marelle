@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
+import CompletionCelebration from "@/components/CompletionCelebration.vue";
 import HopscotchProgress from "@/components/HopscotchProgress.vue";
 import QuestionExercise from "@/components/QuestionExercise.vue";
 import { api, ApiError } from "@/services/api";
@@ -21,8 +22,17 @@ const isLoading = ref(true);
 const isStarting = ref(false);
 const isAnswering = ref(false);
 const isFinishing = ref(false);
+const isAdvancing = ref(false);
+const isAutoContinuePending = ref(false);
+const displayedScore = ref(0);
+const showCompletionCelebration = ref(false);
 const errorMessage = ref("");
 let questionStartedAt = performance.now();
+let celebrationTimer: number | undefined;
+let scoreAnimationFrame: number | undefined;
+let autoContinueTimer: number | undefined;
+
+const AUTO_CONTINUE_DELAY = 3_000;
 
 const currentQuestion = computed<DailyChallengeQuestion | null>(() =>
   challenge.value?.questions[currentIndex.value] ?? null,
@@ -50,7 +60,10 @@ async function loadChallenge(): Promise<void> {
   errorMessage.value = "";
   try {
     challenge.value = (await api.dailyChallenge.current()).challenge;
-    if (challenge.value) initializeProgress(challenge.value);
+    if (challenge.value) {
+      initializeProgress(challenge.value);
+      displayedScore.value = challenge.value.participation.score ?? 0;
+    }
     if (
       challenge.value?.participation.status === "available" &&
       route.query.start === "1"
@@ -62,6 +75,38 @@ async function loadChallenge(): Promise<void> {
   } finally {
     isLoading.value = false;
   }
+}
+
+function animateScore(target: number): void {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    displayedScore.value = target;
+    return;
+  }
+
+  const duration = 1_000;
+  const delay = 350;
+  const startedAt = performance.now();
+  const tick = (now: number): void => {
+    const elapsed = Math.max(0, now - startedAt - delay);
+    const progress = Math.min(1, elapsed / duration);
+    const easedProgress = 1 - Math.pow(1 - progress, 3);
+    displayedScore.value = Math.round(target * easedProgress);
+    if (progress < 1) scoreAnimationFrame = window.requestAnimationFrame(tick);
+  };
+
+  scoreAnimationFrame = window.requestAnimationFrame(tick);
+}
+
+async function celebrateCompletion(value: DailyChallenge): Promise<void> {
+  window.clearTimeout(celebrationTimer);
+  if (scoreAnimationFrame !== undefined) window.cancelAnimationFrame(scoreAnimationFrame);
+  displayedScore.value = 0;
+  showCompletionCelebration.value = true;
+  await nextTick();
+  animateScore(value.participation.score ?? 0);
+  celebrationTimer = window.setTimeout(() => {
+    showCompletionCelebration.value = false;
+  }, 2_600);
 }
 
 async function startChallenge(): Promise<void> {
@@ -103,14 +148,36 @@ async function submitAnswer(
   }
 }
 
+function cancelAutoContinue(): void {
+  window.clearTimeout(autoContinueTimer);
+  autoContinueTimer = undefined;
+  isAutoContinuePending.value = false;
+}
+
+function scheduleAutoContinue(): void {
+  cancelAutoContinue();
+  isAutoContinuePending.value = true;
+  autoContinueTimer = window.setTimeout(() => {
+    void continueChallenge();
+  }, AUTO_CONTINUE_DELAY);
+}
+
+function handleExerciseTransitionEntered(): void {
+  if (feedback.value) scheduleAutoContinue();
+}
+
 async function finishChallenge(): Promise<void> {
   const attemptId = challenge.value?.participation.attemptId;
   if (!attemptId) return;
   isFinishing.value = true;
   errorMessage.value = "";
   try {
-    challenge.value = (await api.dailyChallenge.finish(attemptId)).challenge;
-    if (challenge.value) initializeProgress(challenge.value);
+    const completedChallenge = (await api.dailyChallenge.finish(attemptId)).challenge;
+    challenge.value = completedChallenge;
+    if (completedChallenge) {
+      initializeProgress(completedChallenge);
+      await celebrateCompletion(completedChallenge);
+    }
   } catch (error) {
     errorMessage.value = messageFrom(error);
   } finally {
@@ -119,7 +186,9 @@ async function finishChallenge(): Promise<void> {
 }
 
 async function continueChallenge(): Promise<void> {
-  if (!challenge.value || !currentQuestion.value) return;
+  cancelAutoContinue();
+  if (isAdvancing.value || !challenge.value || !currentQuestion.value) return;
+  isAdvancing.value = true;
   const nextIndex = challenge.value.questions.findIndex(
     (question, index) =>
       index > currentIndex.value &&
@@ -127,11 +196,14 @@ async function continueChallenge(): Promise<void> {
   );
   if (nextIndex < 0) {
     await finishChallenge();
+    isAdvancing.value = false;
     return;
   }
   currentIndex.value = nextIndex;
   feedback.value = null;
   questionStartedAt = performance.now();
+  await nextTick();
+  isAdvancing.value = false;
 }
 
 function durationLabel(seconds: number | null): string {
@@ -142,10 +214,20 @@ function durationLabel(seconds: number | null): string {
 }
 
 onMounted(loadChallenge);
+onBeforeUnmount(() => {
+  cancelAutoContinue();
+  window.clearTimeout(celebrationTimer);
+  if (scoreAnimationFrame !== undefined) window.cancelAnimationFrame(scoreAnimationFrame);
+});
 </script>
 
 <template>
   <div class="page daily-challenge-page">
+    <CompletionCelebration v-if="showCompletionCelebration" />
+    <p v-if="showCompletionCelebration" class="sr-only" role="status">
+      Marelle validée. Bravo, parcours terminé !
+    </p>
+
     <header class="daily-play-header">
       <RouterLink to="/" aria-label="Retour à l’accueil">←</RouterLink>
       <div>
@@ -174,17 +256,27 @@ onMounted(loadChallenge);
       <RouterLink class="secondary-button" to="/">Retour à l’accueil</RouterLink>
     </section>
 
-    <section v-else-if="isCompleted" class="daily-result" aria-labelledby="daily-result-title">
+    <section
+      v-else-if="isCompleted"
+      class="daily-result"
+      :class="{ 'daily-result--celebrating': showCompletionCelebration }"
+      aria-labelledby="daily-result-title"
+    >
+      <div class="daily-result__seal" aria-hidden="true">
+        <span>✓</span>
+        <small>TRAVAIL VALIDÉ</small>
+      </div>
       <p class="eyebrow">Parcours validé</p>
-      <h1 id="daily-result-title">Marelle terminée</h1>
+      <h1 id="daily-result-title">Bravo, tu as fini !</h1>
       <strong class="daily-result__score">
-        {{ challenge.participation.score }} <small>/ {{ challenge.participation.totalQuestions }}</small>
+        {{ displayedScore }} <small>/ {{ challenge.participation.totalQuestions }}</small>
       </strong>
       <div class="daily-result__answers" aria-label="Résultat de chaque question">
         <span
-          v-for="question in challenge.questions"
+          v-for="(question, index) in challenge.questions"
           :key="question.id"
           :class="answers[question.id] ? 'daily-result__answer--correct' : 'daily-result__answer--wrong'"
+          :style="`--answer-index: ${index}`"
         >{{ answers[question.id] ? "✓" : "×" }}</span>
       </div>
       <dl class="daily-result__details">
@@ -222,32 +314,45 @@ onMounted(loadChallenge);
 
       <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
 
-      <QuestionExercise
-        v-if="!feedback"
-        :question="currentQuestion"
-        :disabled="isAnswering"
-        @submit="submitAnswer"
-      />
+      <Transition name="exercise-swap" mode="out-in" @after-enter="handleExerciseTransitionEntered">
+        <QuestionExercise
+          v-if="!feedback"
+          :key="currentQuestion.id"
+          :question="currentQuestion"
+          :disabled="isAnswering"
+          @submit="submitAnswer"
+        />
 
-      <section
-        v-else
-        class="answer-feedback"
-        :class="feedback.isCorrect ? 'answer-feedback--correct' : 'answer-feedback--wrong'"
-        aria-live="polite"
-      >
-        <span class="answer-feedback__icon" aria-hidden="true">{{ feedback.isCorrect ? "✓" : "×" }}</span>
-        <div>
-          <h2>{{ feedback.isCorrect ? "Bien joué !" : "Pas cette fois." }}</h2>
-          <p v-if="feedback.isCorrect">Bonne réponse. Tu avances d’une case.</p>
-          <template v-else>
-            <p>La bonne réponse était : <strong>{{ feedback.correctAnswer }}</strong></p>
-            <p v-if="feedback.explanation">{{ feedback.explanation }}</p>
-          </template>
-        </div>
-        <button class="primary-button" type="button" :disabled="isFinishing" @click="continueChallenge">
-          {{ isFinishing ? "Calcul du résultat…" : "Continuer" }}
-        </button>
-      </section>
+        <section
+          v-else
+          :key="`feedback-${currentQuestion.id}`"
+          class="answer-feedback"
+          :class="feedback.isCorrect ? 'answer-feedback--correct' : 'answer-feedback--wrong'"
+          aria-live="polite"
+        >
+          <span class="answer-feedback__icon" aria-hidden="true">{{ feedback.isCorrect ? "✓" : "×" }}</span>
+          <div>
+            <h2>{{ feedback.isCorrect ? "Bien joué !" : "Pas cette fois." }}</h2>
+            <p v-if="feedback.isCorrect">Bonne réponse. Tu avances d’une case.</p>
+            <template v-else>
+              <p>La bonne réponse était : <strong>{{ feedback.correctAnswer }}</strong></p>
+              <p v-if="feedback.explanation">{{ feedback.explanation }}</p>
+            </template>
+          </div>
+          <button
+            class="primary-button auto-continue-button"
+            type="button"
+            :disabled="isFinishing || isAdvancing"
+            :aria-label="isAutoContinuePending ? 'Continuer, passage automatique dans 3 secondes' : 'Continuer'"
+            @click="continueChallenge"
+          >
+            <span>{{ isFinishing ? "Calcul du résultat…" : "Continuer" }}</span>
+            <span v-if="isAutoContinuePending" class="auto-continue-button__track" aria-hidden="true">
+              <span class="auto-continue-button__fill"></span>
+            </span>
+          </button>
+        </section>
+      </Transition>
     </template>
   </div>
 </template>
