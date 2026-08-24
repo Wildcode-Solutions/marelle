@@ -19,6 +19,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: "/marelle-du-jour",
+      name: "daily-challenge",
+      component: () => import("@/views/DailyChallengeView.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
       path: "/progression",
       name: "progress",
       component: () => import("@/views/ProgressView.vue"),

@@ -1,5 +1,8 @@
 import type {
   AdminCatalog,
+  AdminDailyChallenge,
+  AdminDailyChallengeInput,
+  AdminDailyQuestion,
   AdminOverview,
   AdminQuestion,
   AdminQuestionInput,
@@ -12,6 +15,9 @@ import type {
   AdminUser,
   AdminUsersResponse,
   AuthResponse,
+  DailyChallengeAnswerInput,
+  DailyChallengeAnswerResponse,
+  DailyChallengeResponse,
   DashboardData,
   LoginInput,
   RegisterInput,
@@ -81,6 +87,10 @@ function patchJson<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+function deleteJson<T>(path: string): Promise<T> {
+  return requestJson<T>(path, { method: "DELETE" });
+}
+
 export const api = {
   admin: {
     overview: () => requestJson<AdminOverview>("/api/admin/overview"),
@@ -119,8 +129,31 @@ export const api = {
         `/api/admin/questions/${encodeURIComponent(questionId)}`,
         input,
       ),
+    dailyChallenges: () =>
+      requestJson<{ challenges: AdminDailyChallenge[] }>("/api/admin/daily-challenges"),
+    dailyQuestionLibrary: () =>
+      requestJson<{ questions: AdminDailyQuestion[] }>("/api/admin/daily-question-library"),
+    createDailyChallenge: (input: AdminDailyChallengeInput) =>
+      postJson<{ challenge: AdminDailyChallenge }>("/api/admin/daily-challenges", input),
+    updateDailyChallenge: (challengeId: string, input: AdminDailyChallengeInput) =>
+      patchJson<{ challenge: AdminDailyChallenge }>(
+        `/api/admin/daily-challenges/${encodeURIComponent(challengeId)}`,
+        input,
+      ),
+    deleteDailyChallenge: (challengeId: string) =>
+      deleteJson<{ success: true }>(
+        `/api/admin/daily-challenges/${encodeURIComponent(challengeId)}`,
+      ),
   },
   dashboard: () => requestJson<DashboardData>("/api/dashboard"),
+  dailyChallenge: {
+    current: () => requestJson<DailyChallengeResponse>("/api/daily-challenge"),
+    start: () => postJson<DailyChallengeResponse>("/api/daily-challenge/start"),
+    answer: (input: DailyChallengeAnswerInput) =>
+      postJson<DailyChallengeAnswerResponse>("/api/daily-challenge/answer", input),
+    finish: (attemptId: string) =>
+      postJson<DailyChallengeResponse>("/api/daily-challenge/finish", { attemptId }),
+  },
   subjects: (level = "6e") =>
     requestJson<SubjectSummary[]>(`/api/subjects?level=${encodeURIComponent(level)}`),
   auth: {

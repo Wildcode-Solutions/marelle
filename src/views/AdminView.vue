@@ -2,13 +2,14 @@
 import { onMounted, ref } from "vue";
 
 import AdminContentPanel from "@/components/admin/AdminContentPanel.vue";
+import AdminDailyChallengesPanel from "@/components/admin/AdminDailyChallengesPanel.vue";
 import AdminSubjectsPanel from "@/components/admin/AdminSubjectsPanel.vue";
 import AdminUsersPanel from "@/components/admin/AdminUsersPanel.vue";
 import ViewHeader from "@/components/ViewHeader.vue";
 import { api } from "@/services/api";
 import type { AdminOverview } from "@/types/domain";
 
-type AdminTab = "overview" | "users" | "subjects" | "content";
+type AdminTab = "overview" | "users" | "subjects" | "content" | "dailyChallenges";
 
 const activeTab = ref<AdminTab>("overview");
 const overview = ref<AdminOverview | null>(null);
@@ -45,6 +46,14 @@ async function openOverview(): Promise<void> {
     />
 
     <nav class="admin-tabs" aria-label="Sections d’administration">
+      <button
+        type="button"
+        :class="{ 'admin-tabs__button--active': activeTab === 'dailyChallenges' }"
+        @click="activeTab = 'dailyChallenges'"
+      >
+        <span aria-hidden="true">▦</span>
+        Marelles du jour
+      </button>
       <button
         type="button"
         :class="{ 'admin-tabs__button--active': activeTab === 'overview' }"
@@ -142,6 +151,7 @@ async function openOverview(): Promise<void> {
 
     <AdminUsersPanel v-else-if="activeTab === 'users'" />
     <AdminSubjectsPanel v-else-if="activeTab === 'subjects'" />
+    <AdminDailyChallengesPanel v-else-if="activeTab === 'dailyChallenges'" />
     <AdminContentPanel v-else />
   </div>
 </template>

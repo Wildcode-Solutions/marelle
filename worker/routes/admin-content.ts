@@ -1,6 +1,13 @@
 import { HttpError, json, readJsonObject } from "../lib/http";
 
-type QuestionKind = "multiple_choice" | "true_false" | "short_answer";
+type QuestionKind =
+  | "multiple_choice"
+  | "true_false"
+  | "short_answer"
+  | "numeric"
+  | "fill_in_blank"
+  | "ordering"
+  | "matching";
 type QuestionStatus = "draft" | "published" | "archived";
 
 interface ThemeRow {
@@ -26,6 +33,8 @@ interface QuestionJoinedRow {
   prompt: string;
   explanation: string;
   expected_answer: string | null;
+  numeric_tolerance: number | null;
+  answer_unit: string | null;
   difficulty: number;
   xp_reward: number;
   status: QuestionStatus;
@@ -33,6 +42,11 @@ interface QuestionJoinedRow {
   choice_label: string | null;
   choice_is_correct: number | null;
   choice_position: number | null;
+  item_id: string | null;
+  item_prompt: string | null;
+  item_answer: string | null;
+  item_accepted_answers: string | null;
+  item_position: number | null;
 }
 
 interface ChoiceInput {
@@ -40,16 +54,25 @@ interface ChoiceInput {
   label: string;
 }
 
+interface QuestionItemInput {
+  acceptedAnswers: string[];
+  answer: string;
+  prompt: string;
+}
+
 interface QuestionInput {
   choices: ChoiceInput[];
   difficulty: number;
   expectedAnswer: string | null;
+  numericTolerance: number | null;
+  answerUnit: string | null;
   explanation: string;
   kind: QuestionKind;
   prompt: string;
   status: QuestionStatus;
   themeId: string;
   xpReward: number;
+  items: QuestionItemInput[];
 }
 
 function requiredString(body: Record<string, unknown>, field: string): string {
@@ -338,7 +361,16 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
   const difficulty = integerValue(body.difficulty, "difficulty", 1, 5);
   const xpReward = integerValue(body.xpReward, "xpReward", 1, 100);
 
-  if (kind !== "multiple_choice" && kind !== "true_false" && kind !== "short_answer") {
+  const allowedKinds: QuestionKind[] = [
+    "multiple_choice",
+    "true_false",
+    "short_answer",
+    "numeric",
+    "fill_in_blank",
+    "ordering",
+    "matching",
+  ];
+  if (typeof kind !== "string" || !allowedKinds.includes(kind as QuestionKind)) {
     throw new HttpError(400, "Le type de question est invalide.");
   }
   if (status !== "draft" && status !== "published" && status !== "archived") {
@@ -351,21 +383,122 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
     throw new HttpError(400, "L’explication ne peut pas dépasser 1 000 caractères.");
   }
 
+  const common = {
+    themeId,
+    prompt,
+    explanation,
+    kind: kind as QuestionKind,
+    status: status as QuestionStatus,
+    difficulty,
+    xpReward,
+  };
+
   if (kind === "short_answer") {
     const expectedAnswer = requiredString(body, "expectedAnswer");
     if (!expectedAnswer || expectedAnswer.length > 200) {
       throw new HttpError(400, "La réponse attendue doit contenir entre 1 et 200 caractères.");
     }
     return {
-      themeId,
-      prompt,
-      explanation,
-      kind,
-      status,
-      difficulty,
-      xpReward,
+      ...common,
       expectedAnswer,
+      numericTolerance: null,
+      answerUnit: null,
       choices: [],
+      items: [],
+    };
+  }
+
+  if (kind === "numeric") {
+    const expectedAnswer = requiredString(body, "expectedAnswer").replace(",", ".");
+    const numericValue = Number(expectedAnswer);
+    const toleranceValue = body.numericTolerance;
+    const numericTolerance = toleranceValue === undefined || toleranceValue === null
+      ? 0
+      : Number(toleranceValue);
+    const answerUnit = optionalString(body, "answerUnit");
+    if (!expectedAnswer || !Number.isFinite(numericValue)) {
+      throw new HttpError(400, "La réponse numérique attendue est invalide.");
+    }
+    if (!Number.isFinite(numericTolerance) || numericTolerance < 0 || numericTolerance > 1_000_000_000) {
+      throw new HttpError(400, "La tolérance numérique doit être comprise entre 0 et 1 000 000 000.");
+    }
+    if (answerUnit.length > 30) {
+      throw new HttpError(400, "L’unité ne peut pas dépasser 30 caractères.");
+    }
+    return {
+      ...common,
+      expectedAnswer: String(numericValue),
+      numericTolerance,
+      answerUnit: answerUnit || null,
+      choices: [],
+      items: [],
+    };
+  }
+
+  if (kind === "fill_in_blank" || kind === "ordering" || kind === "matching") {
+    if (!Array.isArray(body.items)) {
+      throw new HttpError(400, "Les éléments de la question sont obligatoires.");
+    }
+    const items = body.items.map((item) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) {
+        throw new HttpError(400, "Un élément de question est invalide.");
+      }
+      const itemPrompt = "prompt" in item && typeof item.prompt === "string"
+        ? item.prompt.trim()
+        : "";
+      const answer = "answer" in item && typeof item.answer === "string"
+        ? item.answer.trim()
+        : "";
+      const rawAcceptedAnswers = "acceptedAnswers" in item ? item.acceptedAnswers : [];
+      if (!Array.isArray(rawAcceptedAnswers)) {
+        throw new HttpError(400, "Les variantes de réponse sont invalides.");
+      }
+      const acceptedAnswers = rawAcceptedAnswers.map((acceptedAnswer) => {
+        if (typeof acceptedAnswer !== "string") {
+          throw new HttpError(400, "Une variante de réponse est invalide.");
+        }
+        return acceptedAnswer.trim();
+      });
+      if (
+        !answer ||
+        answer.length > 300 ||
+        itemPrompt.length > 200 ||
+        acceptedAnswers.length > 5 ||
+        acceptedAnswers.some((acceptedAnswer) => !acceptedAnswer || acceptedAnswer.length > 200)
+      ) {
+        throw new HttpError(400, "Un élément de question est invalide.");
+      }
+      return { prompt: itemPrompt, answer, acceptedAnswers };
+    });
+
+    if (kind === "fill_in_blank") {
+      const placeholders = prompt.match(/\{\{\d+\}\}/g) ?? [];
+      const expectedPlaceholders = items.map((_, index) => `{{${index + 1}}}`);
+      if (
+        items.length < 1 ||
+        items.length > 6 ||
+        placeholders.length !== items.length ||
+        placeholders.some((placeholder, index) => placeholder !== expectedPlaceholders[index])
+      ) {
+        throw new HttpError(
+          400,
+          "Utilise les repères {{1}}, {{2}}, etc. dans l’ordre, avec une réponse par trou.",
+        );
+      }
+    } else if (items.length < 2 || items.length > 8) {
+      throw new HttpError(400, "Une question d’ordre ou d’association doit contenir 2 à 8 éléments.");
+    }
+    if (kind === "matching" && items.some((item) => !item.prompt)) {
+      throw new HttpError(400, "Chaque association doit contenir deux éléments.");
+    }
+
+    return {
+      ...common,
+      expectedAnswer: null,
+      numericTolerance: null,
+      answerUnit: null,
+      choices: [],
+      items,
     };
   }
 
@@ -402,16 +535,25 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
   }
 
   return {
-    themeId,
-    prompt,
-    explanation,
-    kind,
-    status,
-    difficulty,
-    xpReward,
+    ...common,
     expectedAnswer: null,
+    numericTolerance: null,
+    answerUnit: null,
     choices,
+    items: [],
   };
+}
+
+function acceptedAnswers(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((answer): answer is string => typeof answer === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function questionFromRows(rows: QuestionJoinedRow[]) {
@@ -425,6 +567,8 @@ function questionFromRows(rows: QuestionJoinedRow[]) {
     prompt: first.prompt,
     explanation: first.explanation,
     expectedAnswer: first.expected_answer,
+    numericTolerance: first.numeric_tolerance,
+    answerUnit: first.answer_unit,
     difficulty: first.difficulty,
     xpReward: first.xp_reward,
     status: first.status,
@@ -435,6 +579,15 @@ function questionFromRows(rows: QuestionJoinedRow[]) {
         label: row.choice_label as string,
         isCorrect: row.choice_is_correct === 1,
         position: row.choice_position ?? 0,
+      })),
+    items: rows
+      .filter((row) => row.item_id !== null && row.item_answer !== null)
+      .map((row) => ({
+        id: row.item_id as string,
+        prompt: row.item_prompt ?? "",
+        answer: row.item_answer as string,
+        acceptedAnswers: acceptedAnswers(row.item_accepted_answers),
+        position: row.item_position ?? 0,
       })),
   };
 }
@@ -467,22 +620,30 @@ async function questionRows(
       q.id,
       q.chapter_id,
       c.title AS chapter_title,
-      q.kind,
+      COALESCE(q.response_kind, q.kind) AS kind,
       q.prompt,
       q.explanation,
       q.expected_answer,
+      q.numeric_tolerance,
+      q.answer_unit,
       q.difficulty,
       q.xp_reward,
       q.status,
       a.id AS choice_id,
       a.label AS choice_label,
       a.is_correct AS choice_is_correct,
-      a.position AS choice_position
+      a.position AS choice_position,
+      i.id AS item_id,
+      i.item_prompt,
+      i.item_answer,
+      i.accepted_answers AS item_accepted_answers,
+      i.position AS item_position
      FROM questions q
      JOIN chapters c ON c.id = q.chapter_id
      LEFT JOIN answer_choices a ON a.question_id = q.id
+     LEFT JOIN question_items i ON i.question_id = q.id
      WHERE ${condition}
-     ORDER BY q.created_at DESC, a.position`,
+     ORDER BY q.created_at DESC, COALESCE(a.position, i.position)`,
   )
     .bind(id)
     .all<QuestionJoinedRow>();
@@ -503,20 +664,37 @@ async function saveQuestion(
   mode: "create" | "update",
 ): Promise<void> {
   if (!(await themeById(env, input.themeId))) throw new HttpError(400, "Le thème est invalide.");
+  const storageKind = input.kind === "multiple_choice" || input.kind === "true_false"
+    ? input.kind
+    : "short_answer";
 
   const statements: D1PreparedStatement[] = mode === "create"
     ? [
         env.DB.prepare(
           `INSERT INTO questions (
-            id, chapter_id, kind, prompt, explanation, expected_answer, difficulty, xp_reward, status
-          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+            id,
+            chapter_id,
+            kind,
+            response_kind,
+            prompt,
+            explanation,
+            expected_answer,
+            numeric_tolerance,
+            answer_unit,
+            difficulty,
+            xp_reward,
+            status
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
         ).bind(
           questionId,
           input.themeId,
+          storageKind,
           input.kind,
           input.prompt,
           input.explanation,
           input.expectedAnswer,
+          input.numericTolerance,
+          input.answerUnit,
           input.difficulty,
           input.xpReward,
           input.status,
@@ -527,26 +705,33 @@ async function saveQuestion(
           `UPDATE questions
            SET chapter_id = ?1,
                kind = ?2,
-               prompt = ?3,
-               explanation = ?4,
-               expected_answer = ?5,
-               difficulty = ?6,
-               xp_reward = ?7,
-               status = ?8,
+               response_kind = ?3,
+               prompt = ?4,
+               explanation = ?5,
+               expected_answer = ?6,
+               numeric_tolerance = ?7,
+               answer_unit = ?8,
+               difficulty = ?9,
+               xp_reward = ?10,
+               status = ?11,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?9`,
+           WHERE id = ?12`,
         ).bind(
           input.themeId,
+          storageKind,
           input.kind,
           input.prompt,
           input.explanation,
           input.expectedAnswer,
+          input.numericTolerance,
+          input.answerUnit,
           input.difficulty,
           input.xpReward,
           input.status,
           questionId,
         ),
         env.DB.prepare("DELETE FROM answer_choices WHERE question_id = ?1").bind(questionId),
+        env.DB.prepare("DELETE FROM question_items WHERE question_id = ?1").bind(questionId),
       ];
 
   input.choices.forEach((choice, index) => {
@@ -559,6 +744,23 @@ async function saveQuestion(
         questionId,
         choice.label,
         choice.isCorrect ? 1 : 0,
+        index + 1,
+      ),
+    );
+  });
+
+  input.items.forEach((item, index) => {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO question_items (
+          id, question_id, item_prompt, item_answer, accepted_answers, position
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+      ).bind(
+        crypto.randomUUID(),
+        questionId,
+        item.prompt || null,
+        item.answer,
+        JSON.stringify(item.acceptedAnswers),
         index + 1,
       ),
     );

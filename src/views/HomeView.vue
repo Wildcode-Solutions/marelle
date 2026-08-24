@@ -2,12 +2,14 @@
 import { computed, onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
+import DailyChallengeCard from "@/components/DailyChallengeCard.vue";
 import DailyGoalCard from "@/components/DailyGoalCard.vue";
 import SubjectGrid from "@/components/SubjectGrid.vue";
 import { api } from "@/services/api";
-import type { DashboardData } from "@/types/domain";
+import type { DailyChallenge, DashboardData } from "@/types/domain";
 
 const dashboard = ref<DashboardData | null>(null);
+const dailyChallenge = ref<DailyChallenge | null>(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 
@@ -22,7 +24,12 @@ async function loadDashboard(): Promise<void> {
   errorMessage.value = "";
 
   try {
-    dashboard.value = await api.dashboard();
+    const [dashboardResponse, dailyChallengeResponse] = await Promise.all([
+      api.dashboard(),
+      api.dailyChallenge.current(),
+    ]);
+    dashboard.value = dashboardResponse;
+    dailyChallenge.value = dailyChallengeResponse.challenge;
   } catch {
     errorMessage.value = "Impossible de charger ta progression. Vérifie que l’API et la base locale sont démarrées.";
   } finally {
@@ -60,6 +67,12 @@ onMounted(loadDashboard);
       </div>
       <span class="level-badge">Niveau {{ dashboard.user.level }}</span>
     </section>
+
+    <DailyChallengeCard
+      v-if="dailyChallenge"
+      :challenge="dailyChallenge"
+      :current-streak="dashboard.user.currentStreak"
+    />
 
     <DailyGoalCard :progress="dashboard.today" />
 

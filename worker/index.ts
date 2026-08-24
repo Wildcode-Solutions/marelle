@@ -11,6 +11,13 @@ import {
 } from "./routes/admin-content";
 import { adminUsers, updateAdminUser } from "./routes/admin-users";
 import {
+  adminDailyChallenges,
+  adminDailyQuestionLibrary,
+  createAdminDailyChallenge,
+  deleteAdminDailyChallenge,
+  updateAdminDailyChallenge,
+} from "./routes/admin-daily-challenges";
+import {
   adminSubjects,
   createAdminSubject,
   updateAdminSubject,
@@ -18,6 +25,12 @@ import {
 import { adminOverview } from "./routes/admin";
 import { login, logout, me, register, schoolLevels, updateProfile } from "./routes/auth";
 import { dashboard } from "./routes/dashboard";
+import {
+  answerDailyChallenge,
+  dailyChallenge,
+  finishDailyChallenge,
+  startDailyChallenge,
+} from "./routes/daily-challenge";
 import { subjects } from "./routes/subjects";
 
 function methodNotAllowed(request: Request, methods: string[]): Response {
@@ -49,6 +62,17 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
     const actor = await requireAdminUser(request, env);
     return updateAdminUser(request, env, actor, adminUserId);
+  }
+
+  const adminDailyChallengeId = pathIdentifier(pathname, "/api/admin/daily-challenges/");
+  if (adminDailyChallengeId !== null) {
+    if (request.method !== "PATCH" && request.method !== "DELETE") {
+      return methodNotAllowed(request, ["PATCH", "DELETE"]);
+    }
+    await requireAdminUser(request, env);
+    return request.method === "PATCH"
+      ? updateAdminDailyChallenge(request, env, adminDailyChallengeId)
+      : deleteAdminDailyChallenge(request, env, adminDailyChallengeId);
   }
 
   const adminThemeId = pathIdentifier(pathname, "/api/admin/themes/");
@@ -113,6 +137,30 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       return dashboard(request, env, user.id);
     }
 
+    case "/api/daily-challenge": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return dailyChallenge(request, env, user.id);
+    }
+
+    case "/api/daily-challenge/start": {
+      if (request.method !== "POST") return methodNotAllowed(request, ["POST"]);
+      const user = await requireSessionUser(request, env);
+      return startDailyChallenge(request, env, user.id);
+    }
+
+    case "/api/daily-challenge/answer": {
+      if (request.method !== "POST") return methodNotAllowed(request, ["POST"]);
+      const user = await requireSessionUser(request, env);
+      return answerDailyChallenge(request, env, user.id);
+    }
+
+    case "/api/daily-challenge/finish": {
+      if (request.method !== "POST") return methodNotAllowed(request, ["POST"]);
+      const user = await requireSessionUser(request, env);
+      return finishDailyChallenge(request, env, user.id);
+    }
+
     case "/api/admin/overview":
       if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
       await requireAdminUser(request, env);
@@ -122,6 +170,20 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
       await requireAdminUser(request, env);
       return adminUsers(request, env);
+
+    case "/api/admin/daily-challenges":
+      if (request.method !== "GET" && request.method !== "POST") {
+        return methodNotAllowed(request, ["GET", "POST"]);
+      }
+      await requireAdminUser(request, env);
+      return request.method === "GET"
+        ? adminDailyChallenges(request, env)
+        : createAdminDailyChallenge(request, env);
+
+    case "/api/admin/daily-question-library":
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireAdminUser(request, env);
+      return adminDailyQuestionLibrary(request, env);
 
     case "/api/admin/catalog":
       if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);

@@ -7,6 +7,7 @@ import type {
   AdminCatalog,
   AdminQuestion,
   AdminQuestionInput,
+  AdminQuestionItem,
   AdminTheme,
   AdminThemeInput,
   QuestionKind,
@@ -36,22 +37,29 @@ const themeForm = reactive<AdminThemeInput>({
   isActive: true,
 });
 
-const questionForm = reactive<Omit<AdminQuestionInput, "choices">>({
+const questionForm = reactive<Omit<AdminQuestionInput, "choices" | "items">>({
   themeId: "",
   kind: "multiple_choice",
   prompt: "",
   explanation: "",
   expectedAnswer: "",
+  numericTolerance: null,
+  answerUnit: "",
   difficulty: 1,
   xpReward: 10,
   status: "draft",
 });
 const choices = ref<AdminAnswerChoice[]>([]);
+const items = ref<AdminQuestionItem[]>([]);
 
 const kindLabels: Record<QuestionKind, string> = {
   multiple_choice: "QCM",
   true_false: "Vrai / faux",
   short_answer: "Réponse libre",
+  numeric: "Réponse numérique",
+  fill_in_blank: "Texte à trous",
+  ordering: "Mise en ordre",
+  matching: "Association",
 };
 
 const statusLabels: Record<QuestionStatus, string> = {
@@ -163,6 +171,23 @@ function defaultChoices(kind: QuestionKind): AdminAnswerChoice[] {
   return [];
 }
 
+function defaultItems(kind: QuestionKind): AdminQuestionItem[] {
+  const count = kind === "fill_in_blank" ? 1 : kind === "ordering" || kind === "matching" ? 2 : 0;
+  return Array.from({ length: count }, () => ({
+    prompt: "",
+    answer: "",
+    acceptedAnswers: [],
+  }));
+}
+
+function isChoiceKind(kind: QuestionKind): boolean {
+  return kind === "multiple_choice" || kind === "true_false";
+}
+
+function isStructuredKind(kind: QuestionKind): boolean {
+  return kind === "fill_in_blank" || kind === "ordering" || kind === "matching";
+}
+
 function newQuestion(): void {
   if (!selectedTheme.value) return;
   clearMessages();
@@ -172,10 +197,13 @@ function newQuestion(): void {
   questionForm.prompt = "";
   questionForm.explanation = "";
   questionForm.expectedAnswer = "";
+  questionForm.numericTolerance = null;
+  questionForm.answerUnit = "";
   questionForm.difficulty = 1;
   questionForm.xpReward = 10;
   questionForm.status = "draft";
   choices.value = defaultChoices("multiple_choice");
+  items.value = [];
   showQuestionForm.value = true;
 }
 
@@ -187,6 +215,8 @@ function editQuestion(question: AdminQuestion): void {
   questionForm.prompt = question.prompt;
   questionForm.explanation = question.explanation;
   questionForm.expectedAnswer = question.expectedAnswer ?? "";
+  questionForm.numericTolerance = question.numericTolerance;
+  questionForm.answerUnit = question.answerUnit ?? "";
   questionForm.difficulty = question.difficulty;
   questionForm.xpReward = question.xpReward;
   questionForm.status = question.status;
@@ -194,12 +224,20 @@ function editQuestion(question: AdminQuestion): void {
     label: choice.label,
     isCorrect: choice.isCorrect,
   }));
+  items.value = question.items.map((item) => ({
+    prompt: item.prompt,
+    answer: item.answer,
+    acceptedAnswers: [...item.acceptedAnswers],
+  }));
   showQuestionForm.value = true;
 }
 
 function changeQuestionKind(): void {
   choices.value = defaultChoices(questionForm.kind);
+  items.value = defaultItems(questionForm.kind);
   questionForm.expectedAnswer = "";
+  questionForm.numericTolerance = questionForm.kind === "numeric" ? 0 : null;
+  questionForm.answerUnit = "";
 }
 
 function markCorrect(index: number): void {
@@ -219,6 +257,24 @@ function removeChoice(index: number): void {
   if (removedWasCorrect && choices.value[0]) choices.value[0].isCorrect = true;
 }
 
+function addItem(): void {
+  const maximum = questionForm.kind === "fill_in_blank" ? 6 : 8;
+  if (items.value.length >= maximum) return;
+  items.value.push({ prompt: "", answer: "", acceptedAnswers: [] });
+}
+
+function removeItem(index: number): void {
+  const minimum = questionForm.kind === "fill_in_blank" ? 1 : 2;
+  if (items.value.length <= minimum) return;
+  items.value.splice(index, 1);
+}
+
+function moveItem(index: number, direction: -1 | 1): void {
+  const target = index + direction;
+  if (target < 0 || target >= items.value.length) return;
+  [items.value[index], items.value[target]] = [items.value[target]!, items.value[index]!];
+}
+
 async function saveQuestion(): Promise<void> {
   if (!selectedTheme.value) return;
   isSaving.value = true;
@@ -227,15 +283,24 @@ async function saveQuestion(): Promise<void> {
     const input: AdminQuestionInput = {
       ...questionForm,
       themeId: selectedTheme.value.id,
-      expectedAnswer: questionForm.kind === "short_answer"
+      expectedAnswer: questionForm.kind === "short_answer" || questionForm.kind === "numeric"
         ? questionForm.expectedAnswer
         : null,
-      choices: questionForm.kind === "short_answer"
-        ? []
-        : choices.value.map((choice) => ({
+      numericTolerance: questionForm.kind === "numeric" ? questionForm.numericTolerance : null,
+      answerUnit: questionForm.kind === "numeric" ? questionForm.answerUnit : null,
+      choices: isChoiceKind(questionForm.kind)
+        ? choices.value.map((choice) => ({
             label: choice.label,
             isCorrect: choice.isCorrect,
-          })),
+          }))
+        : [],
+      items: isStructuredKind(questionForm.kind)
+        ? items.value.map((item) => ({
+            prompt: item.prompt,
+            answer: item.answer,
+            acceptedAnswers: [...item.acceptedAnswers],
+          }))
+        : [],
     };
     const response = editingQuestionId.value
       ? await api.admin.updateQuestion(editingQuestionId.value, input)
@@ -260,7 +325,7 @@ onMounted(loadWorkspace);
       <div>
         <p class="eyebrow">Studio pédagogique</p>
         <h2 id="content-title">Thèmes et questions</h2>
-        <p>Construis les exercices proposés aux élèves, comme des petites unités Duolingo.</p>
+        <p>Construis les différents exercices proposés aux élèves.</p>
       </div>
       <button class="compact-button compact-button--primary" type="button" @click="newTheme">
         + Nouveau thème
@@ -333,8 +398,11 @@ onMounted(loadWorkspace);
               <strong>{{ question.prompt }}</strong>
               <p>
                 Difficulté {{ question.difficulty }}/5 · {{ question.xpReward }} XP
-                <template v-if="question.kind !== 'short_answer'">
+                <template v-if="isChoiceKind(question.kind)">
                   · {{ question.choices.length }} choix
+                </template>
+                <template v-else-if="isStructuredKind(question.kind)">
+                  · {{ question.items.length }} élément{{ question.items.length > 1 ? "s" : "" }}
                 </template>
               </p>
               <button class="text-button" type="button" @click="editQuestion(question)">
@@ -420,14 +488,30 @@ onMounted(loadWorkspace);
             <option value="multiple_choice">QCM</option>
             <option value="true_false">Vrai / faux</option>
             <option value="short_answer">Réponse libre</option>
+            <option value="numeric">Réponse numérique</option>
+            <option value="fill_in_blank">Texte à trous</option>
+            <option value="ordering">Mise en ordre</option>
+            <option value="matching">Association</option>
           </select>
         </label>
         <label class="form-field">
           <span>Question</span>
-          <textarea v-model="questionForm.prompt" required minlength="3" maxlength="500" rows="3" placeholder="Écris la consigne ou la question…"></textarea>
+          <textarea
+            v-model="questionForm.prompt"
+            required
+            minlength="3"
+            maxlength="500"
+            rows="3"
+            :placeholder="questionForm.kind === 'fill_in_blank'
+              ? 'Ex. La capitale de la France est {{1}}.'
+              : 'Écris la consigne ou la question…'"
+          ></textarea>
+          <small v-if="questionForm.kind === 'fill_in_blank'">
+            Place <code v-pre>{{1}}</code>, puis <code v-pre>{{2}}</code>, dans le texte pour chaque blanc.
+          </small>
         </label>
 
-        <fieldset v-if="questionForm.kind !== 'short_answer'" class="choice-editor">
+        <fieldset v-if="isChoiceKind(questionForm.kind)" class="choice-editor">
           <legend>Réponses <small>— coche la bonne réponse</small></legend>
           <div v-for="(choice, index) in choices" :key="index" class="choice-editor-row">
             <input
@@ -465,10 +549,108 @@ onMounted(loadWorkspace);
           </button>
         </fieldset>
 
-        <label v-else class="form-field">
+        <label
+          v-else-if="questionForm.kind === 'short_answer' || questionForm.kind === 'numeric'"
+          class="form-field"
+        >
           <span>Réponse attendue</span>
-          <input v-model="questionForm.expectedAnswer" required maxlength="200" placeholder="La réponse à comparer" />
+          <input
+            v-model="questionForm.expectedAnswer"
+            required
+            maxlength="200"
+            :inputmode="questionForm.kind === 'numeric' ? 'decimal' : 'text'"
+            :placeholder="questionForm.kind === 'numeric' ? 'Ex. 12,5' : 'La réponse à comparer'"
+          />
         </label>
+
+        <div v-if="questionForm.kind === 'numeric'" class="admin-form-grid">
+          <label class="form-field">
+            <span>Tolérance acceptée</span>
+            <input
+              v-model.number="questionForm.numericTolerance"
+              type="number"
+              min="0"
+              max="1000000000"
+              step="any"
+              required
+            />
+          </label>
+          <label class="form-field">
+            <span>Unité <small>(facultatif)</small></span>
+            <input v-model="questionForm.answerUnit" maxlength="30" placeholder="cm, kg, %…" />
+          </label>
+        </div>
+
+        <fieldset v-if="isStructuredKind(questionForm.kind)" class="choice-editor">
+          <legend>
+            <template v-if="questionForm.kind === 'fill_in_blank'">Réponses des blancs</template>
+            <template v-else-if="questionForm.kind === 'ordering'">Éléments dans l’ordre correct</template>
+            <template v-else>Paires à associer</template>
+          </legend>
+          <div
+            v-for="(item, index) in items"
+            :key="index"
+            class="question-item-editor"
+            :class="{ 'question-item-editor--matching': questionForm.kind === 'matching' }"
+          >
+            <span class="question-item-editor__position">{{ index + 1 }}</span>
+            <input
+              v-if="questionForm.kind === 'matching'"
+              v-model="item.prompt"
+              required
+              maxlength="200"
+              :placeholder="`Élément ${index + 1}`"
+              :aria-label="`Élément à associer ${index + 1}`"
+            />
+            <input
+              v-model="item.answer"
+              required
+              maxlength="300"
+              :placeholder="questionForm.kind === 'matching'
+                ? `Réponse associée ${index + 1}`
+                : `Réponse ${index + 1}`"
+              :aria-label="`Réponse ${index + 1}`"
+            />
+            <span class="question-item-editor__actions">
+              <button
+                v-if="questionForm.kind === 'ordering'"
+                class="icon-button icon-button--small"
+                type="button"
+                :disabled="index === 0"
+                :aria-label="`Monter l’élément ${index + 1}`"
+                @click="moveItem(index, -1)"
+              >↑</button>
+              <button
+                v-if="questionForm.kind === 'ordering'"
+                class="icon-button icon-button--small"
+                type="button"
+                :disabled="index === items.length - 1"
+                :aria-label="`Descendre l’élément ${index + 1}`"
+                @click="moveItem(index, 1)"
+              >↓</button>
+              <button
+                class="icon-button icon-button--small"
+                type="button"
+                :disabled="items.length <= (questionForm.kind === 'fill_in_blank' ? 1 : 2)"
+                :aria-label="`Supprimer l’élément ${index + 1}`"
+                @click="removeItem(index)"
+              >×</button>
+            </span>
+          </div>
+          <button
+            v-if="items.length < (questionForm.kind === 'fill_in_blank' ? 6 : 8)"
+            class="compact-button"
+            type="button"
+            @click="addItem"
+          >
+            + Ajouter
+            {{ questionForm.kind === "fill_in_blank"
+              ? "un blanc"
+              : questionForm.kind === "matching"
+                ? "une paire"
+                : "un élément" }}
+          </button>
+        </fieldset>
 
         <label class="form-field">
           <span>Explication après la réponse</span>

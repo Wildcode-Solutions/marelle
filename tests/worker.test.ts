@@ -422,6 +422,519 @@ describe("Marelle Worker API", () => {
     expect(revokedResponse.status).toBe(401);
   });
 
+  it("manages and completes one shared daily challenge without exposing answers", async () => {
+    const adminEmail = `admin-marelle-${crypto.randomUUID()}@marelle.test`;
+    const registerResponse = await request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "Morgan",
+        email: adminEmail,
+        password: testPassword,
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const cookie = cookieFrom(registerResponse);
+    const registerBody = await registerResponse.json<{ user: { id: string } }>();
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?1")
+      .bind(registerBody.user.id)
+      .run();
+
+    const questionId = `q-daily-${crypto.randomUUID()}`;
+    await env.DB.prepare(
+      `INSERT INTO questions (
+        id, chapter_id, kind, prompt, explanation, expected_answer, difficulty, xp_reward, status
+      ) VALUES (?1, 'history-6e-antiquity', 'short_answer', ?2, ?3, 'Athènes', 2, 12, 'published')`,
+    )
+      .bind(
+        questionId,
+        "Quelle cité est associée à la naissance de la démocratie antique ?",
+        "Athènes développe une forme de démocratie directe dans l’Antiquité.",
+      )
+      .run();
+
+    const today = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "Europe/Paris",
+        year: "numeric",
+      })
+        .formatToParts(new Date())
+        .map((part) => [part.type, part.value]),
+    );
+    const publicationDate = `${today.year}-${today.month}-${today.day}`;
+    const challengeInput = {
+      publicationDate,
+      title: "Marelle commune de test",
+      status: "published",
+      questionIds: ["q-math-place-value", "q-french-noun", questionId],
+    };
+
+    const duplicateQuestionResponse = await request("/api/admin/daily-challenges", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        ...challengeInput,
+        questionIds: ["q-math-place-value", "q-math-place-value", questionId],
+      }),
+    });
+    expect(duplicateQuestionResponse.status).toBe(400);
+
+    const createResponse = await request("/api/admin/daily-challenges", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify(challengeInput),
+    });
+    expect(createResponse.status).toBe(201);
+    const createBody = await createResponse.json<{
+      challenge: { id: string; effectiveStatus: string; questionCount: number };
+    }>();
+    expect(createBody.challenge).toMatchObject({
+      effectiveStatus: "active",
+      questionCount: 3,
+    });
+
+    const sameDateResponse = await request("/api/admin/daily-challenges", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify(challengeInput),
+    });
+    expect(sameDateResponse.status).toBe(409);
+
+    const unpublishResponse = await request(
+      `/api/admin/daily-challenges/${createBody.challenge.id}`,
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie },
+        body: JSON.stringify({
+          ...challengeInput,
+          status: "draft",
+          questionIds: [...challengeInput.questionIds].reverse(),
+        }),
+      },
+    );
+    expect(unpublishResponse.status).toBe(200);
+    await expect(unpublishResponse.json()).resolves.toMatchObject({
+      challenge: {
+        effectiveStatus: "draft",
+        questions: [
+          expect.objectContaining({ id: questionId, position: 1 }),
+          expect.objectContaining({ id: "q-french-noun", position: 2 }),
+          expect.objectContaining({ id: "q-math-place-value", position: 3 }),
+        ],
+      },
+    });
+    const unavailableResponse = await request("/api/daily-challenge", {
+      headers: { Cookie: cookie },
+    });
+    await expect(unavailableResponse.json()).resolves.toEqual({ challenge: null });
+
+    const republishResponse = await request(
+      `/api/admin/daily-challenges/${createBody.challenge.id}`,
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie },
+        body: JSON.stringify(challengeInput),
+      },
+    );
+    expect(republishResponse.status).toBe(200);
+    await expect(republishResponse.json()).resolves.toMatchObject({
+      challenge: { effectiveStatus: "active", status: "published" },
+    });
+
+    const libraryResponse = await request(
+      "/api/admin/daily-question-library?subjectId=history-geography&kind=short_answer",
+      { headers: { Cookie: cookie } },
+    );
+    expect(libraryResponse.status).toBe(200);
+    await expect(libraryResponse.json()).resolves.toMatchObject({
+      questions: [expect.objectContaining({ id: questionId, difficulty: 2 })],
+    });
+
+    const currentResponse = await request("/api/daily-challenge", {
+      headers: { Cookie: cookie },
+    });
+    expect(currentResponse.status).toBe(200);
+    const currentBody = await currentResponse.json<{
+      challenge: {
+        id: string;
+        participation: { status: string };
+        questions: Array<{ id: string; choices: Array<Record<string, unknown>> }>;
+      };
+    }>();
+    expect(currentBody.challenge).toMatchObject({
+      id: createBody.challenge.id,
+      participation: { status: "available" },
+    });
+    expect(currentBody.challenge.questions.map((question) => question.id)).toEqual(
+      challengeInput.questionIds,
+    );
+    expect(JSON.stringify(currentBody)).not.toContain("isCorrect");
+    expect(JSON.stringify(currentBody)).not.toContain("expectedAnswer");
+    expect(JSON.stringify(currentBody)).not.toContain("Athènes");
+
+    const startResponse = await request("/api/daily-challenge/start", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    expect(startResponse.status).toBe(200);
+    const startBody = await startResponse.json<{
+      challenge: { participation: { attemptId: string; status: string } };
+    }>();
+    expect(startBody.challenge.participation.status).toBe("in_progress");
+
+    const secondStartResponse = await request("/api/daily-challenge/start", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    const secondStartBody = await secondStartResponse.json<{
+      challenge: { participation: { attemptId: string } };
+    }>();
+    expect(secondStartBody.challenge.participation.attemptId).toBe(
+      startBody.challenge.participation.attemptId,
+    );
+
+    const unfinishedResponse = await request("/api/daily-challenge/finish", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ attemptId: startBody.challenge.participation.attemptId }),
+    });
+    expect(unfinishedResponse.status).toBe(409);
+
+    const firstAnswerResponse = await request("/api/daily-challenge/answer", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        attemptId: startBody.challenge.participation.attemptId,
+        questionId: "q-math-place-value",
+        answerChoiceId: "a-math-2",
+        answerText: null,
+        responseTimeMs: 820,
+      }),
+    });
+    expect(firstAnswerResponse.status).toBe(200);
+    await expect(firstAnswerResponse.json()).resolves.toMatchObject({
+      feedback: { isCorrect: true, correctAnswer: "7" },
+      progress: { answered: 1, score: 1, total: 3, readyToFinish: false },
+    });
+
+    const repeatedAnswerResponse = await request("/api/daily-challenge/answer", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        attemptId: startBody.challenge.participation.attemptId,
+        questionId: "q-math-place-value",
+        answerChoiceId: "a-math-2",
+        answerText: null,
+        responseTimeMs: 500,
+      }),
+    });
+    expect(repeatedAnswerResponse.status).toBe(409);
+
+    const wrongAnswerResponse = await request("/api/daily-challenge/answer", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        attemptId: startBody.challenge.participation.attemptId,
+        questionId: "q-french-noun",
+        answerChoiceId: "a-french-1",
+        answerText: null,
+        responseTimeMs: 1250,
+      }),
+    });
+    expect(wrongAnswerResponse.status).toBe(200);
+    await expect(wrongAnswerResponse.json()).resolves.toMatchObject({
+      feedback: {
+        isCorrect: false,
+        correctAnswer: "chat",
+        explanation: expect.stringContaining("nom commun"),
+      },
+      progress: { answered: 2, score: 1 },
+    });
+
+    const freeAnswerResponse = await request("/api/daily-challenge/answer", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        attemptId: startBody.challenge.participation.attemptId,
+        questionId,
+        answerChoiceId: null,
+        answerText: "  ATHÈNES ",
+        responseTimeMs: 1900,
+      }),
+    });
+    expect(freeAnswerResponse.status).toBe(200);
+    await expect(freeAnswerResponse.json()).resolves.toMatchObject({
+      feedback: { isCorrect: true, correctAnswer: "Athènes" },
+      progress: { answered: 3, score: 2, readyToFinish: true },
+    });
+
+    const finishResponse = await request("/api/daily-challenge/finish", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ attemptId: startBody.challenge.participation.attemptId }),
+    });
+    expect(finishResponse.status).toBe(200);
+    const finishBody = await finishResponse.json<{
+      challenge: {
+        participation: {
+          currentStreak: number;
+          durationSeconds: number;
+          score: number;
+          status: string;
+          totalQuestions: number;
+        };
+      };
+    }>();
+    expect(finishBody.challenge.participation).toMatchObject({
+      status: "completed",
+      score: 2,
+      totalQuestions: 3,
+      currentStreak: 1,
+    });
+    expect(finishBody.challenge.participation.durationSeconds).toBeGreaterThanOrEqual(0);
+
+    const restartResponse = await request("/api/daily-challenge/start", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    expect(restartResponse.status).toBe(200);
+    await expect(restartResponse.json()).resolves.toMatchObject({
+      challenge: { participation: { status: "completed", score: 2 } },
+    });
+
+    const counts = await env.DB.prepare(
+      `SELECT
+        (SELECT COUNT(*) FROM daily_challenge_attempts WHERE daily_challenge_id = ?1) AS attempts,
+        (SELECT COUNT(*) FROM user_answers ua
+         JOIN daily_challenge_attempts dca ON dca.session_id = ua.session_id
+         WHERE dca.daily_challenge_id = ?1) AS answers`,
+    )
+      .bind(createBody.challenge.id)
+      .first<{ answers: number; attempts: number }>();
+    expect(counts).toEqual({ attempts: 1, answers: 3 });
+
+    const lockedDeleteResponse = await request(
+      `/api/admin/daily-challenges/${createBody.challenge.id}`,
+      { method: "DELETE", headers: { Cookie: cookie } },
+    );
+    expect(lockedDeleteResponse.status).toBe(409);
+  });
+
+  it("creates and corrects the five extended question formats", async () => {
+    const registerResponse = await request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "Charlie",
+        email: `formats-${crypto.randomUUID()}@marelle.test`,
+        password: testPassword,
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const cookie = cookieFrom(registerResponse);
+    const registerBody = await registerResponse.json<{ user: { id: string } }>();
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?1")
+      .bind(registerBody.user.id)
+      .run();
+
+    const inputs = [
+      {
+        kind: "short_answer",
+        prompt: "Quelle couleur obtient-on avec du jaune et du bleu ?",
+        explanation: "Le jaune et le bleu donnent du vert.",
+        expectedAnswer: "vert",
+        numericTolerance: null,
+        answerUnit: null,
+        choices: [],
+        items: [],
+      },
+      {
+        kind: "numeric",
+        prompt: "Donne une approximation de π au centième.",
+        explanation: "π vaut environ 3,14.",
+        expectedAnswer: "3,14",
+        numericTolerance: 0.01,
+        answerUnit: null,
+        choices: [],
+        items: [],
+      },
+      {
+        kind: "fill_in_blank",
+        prompt: "Le ciel est {{1}} et l’herbe est {{2}}.",
+        explanation: "On associe généralement le ciel au bleu et l’herbe au vert.",
+        expectedAnswer: null,
+        numericTolerance: null,
+        answerUnit: null,
+        choices: [],
+        items: [
+          { prompt: "", answer: "bleu", acceptedAnswers: ["azur"] },
+          { prompt: "", answer: "verte", acceptedAnswers: ["vert"] },
+        ],
+      },
+      {
+        kind: "ordering",
+        prompt: "Range ces saisons à partir du début de l’année.",
+        explanation: "L’hiver précède le printemps, l’été puis l’automne.",
+        expectedAnswer: null,
+        numericTolerance: null,
+        answerUnit: null,
+        choices: [],
+        items: [
+          { prompt: "", answer: "Hiver", acceptedAnswers: [] },
+          { prompt: "", answer: "Printemps", acceptedAnswers: [] },
+          { prompt: "", answer: "Été", acceptedAnswers: [] },
+          { prompt: "", answer: "Automne", acceptedAnswers: [] },
+        ],
+      },
+      {
+        kind: "matching",
+        prompt: "Associe chaque pays à sa capitale.",
+        explanation: "Paris et Rome sont les capitales de la France et de l’Italie.",
+        expectedAnswer: null,
+        numericTolerance: null,
+        answerUnit: null,
+        choices: [],
+        items: [
+          { prompt: "France", answer: "Paris", acceptedAnswers: [] },
+          { prompt: "Italie", answer: "Rome", acceptedAnswers: [] },
+        ],
+      },
+    ] as const;
+
+    const createdQuestions: Array<{
+      id: string;
+      kind: string;
+      items: Array<{ id: string; position: number }>;
+    }> = [];
+    for (const input of inputs) {
+      const response = await request("/api/admin/questions", {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: JSON.stringify({
+          themeId: "math-6e-numbers",
+          difficulty: 2,
+          xpReward: 10,
+          status: "published",
+          ...input,
+        }),
+      });
+      expect(response.status).toBe(201);
+      const body = await response.json<{
+        question: {
+          id: string;
+          kind: string;
+          items: Array<{ id: string; position: number }>;
+        };
+      }>();
+      createdQuestions.push(body.question);
+    }
+    expect(createdQuestions.map((question) => question.kind)).toEqual(
+      inputs.map((input) => input.kind),
+    );
+
+    const today = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "Europe/Paris",
+        year: "numeric",
+      })
+        .formatToParts(new Date())
+        .map((part) => [part.type, part.value]),
+    );
+    await env.DB.prepare("DELETE FROM daily_challenges WHERE publication_date = ?1")
+      .bind(`${today.year}-${today.month}-${today.day}`)
+      .run();
+    const challengeResponse = await request("/api/admin/daily-challenges", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        publicationDate: `${today.year}-${today.month}-${today.day}`,
+        title: "Marelle multi-formats",
+        status: "published",
+        questionIds: createdQuestions.map((question) => question.id),
+      }),
+    });
+    expect(challengeResponse.status).toBe(201);
+
+    const currentResponse = await request("/api/daily-challenge", {
+      headers: { Cookie: cookie },
+    });
+    const currentBody = await currentResponse.json<{
+      challenge: {
+        questions: Array<{
+          blankCount: number;
+          kind: string;
+          matchingOptions: Array<{ id: string }>;
+          orderingItems: Array<{ id: string }>;
+        }>;
+      };
+    }>();
+    expect(currentResponse.status).toBe(200);
+    expect(currentBody.challenge.questions.map((question) => question.kind)).toEqual(
+      inputs.map((input) => input.kind),
+    );
+    expect(currentBody.challenge.questions.find((question) => question.kind === "fill_in_blank"))
+      .toMatchObject({ blankCount: 2 });
+    expect(currentBody.challenge.questions.find((question) => question.kind === "ordering")?.orderingItems)
+      .toHaveLength(4);
+    expect(currentBody.challenge.questions.find((question) => question.kind === "matching")?.matchingOptions)
+      .toHaveLength(2);
+    expect(JSON.stringify(currentBody)).not.toContain("expectedAnswer");
+    expect(JSON.stringify(currentBody)).not.toContain("numericTolerance");
+    expect(JSON.stringify(currentBody)).not.toContain("acceptedAnswers");
+
+    const startResponse = await request("/api/daily-challenge/start", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    const startBody = await startResponse.json<{
+      challenge: { participation: { attemptId: string } };
+    }>();
+    const attemptId = startBody.challenge.participation.attemptId;
+    const ordering = createdQuestions.find((question) => question.kind === "ordering")!;
+    const matching = createdQuestions.find((question) => question.kind === "matching")!;
+    const answers = [
+      { answerText: " VERT " },
+      { answerText: "3,145" },
+      { blankAnswers: ["azur", "vert"] },
+      { orderedItemIds: ordering.items.map((item) => item.id) },
+      {
+        matches: matching.items.map((item) => ({
+          promptPosition: item.position,
+          answerItemId: item.id,
+        })),
+      },
+    ];
+
+    for (const [index, answer] of answers.entries()) {
+      const response = await request("/api/daily-challenge/answer", {
+        method: "POST",
+        headers: { Cookie: cookie },
+        body: JSON.stringify({
+          attemptId,
+          questionId: createdQuestions[index]!.id,
+          responseTimeMs: 500,
+          ...answer,
+        }),
+      });
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ feedback: { isCorrect: true } });
+    }
+
+    const finishResponse = await request("/api/daily-challenge/finish", {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ attemptId }),
+    });
+    expect(finishResponse.status).toBe(200);
+    await expect(finishResponse.json()).resolves.toMatchObject({
+      challenge: {
+        participation: { status: "completed", score: 5, totalQuestions: 5 },
+      },
+    });
+  });
+
   it("rejects unknown cross-origin requests", async () => {
     const response = await request("/api/auth/login", {
       method: "POST",

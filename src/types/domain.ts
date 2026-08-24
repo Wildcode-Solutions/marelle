@@ -123,13 +123,28 @@ export interface AdminThemesResponse {
   pagination: Pagination;
 }
 
-export type QuestionKind = "multiple_choice" | "true_false" | "short_answer";
+export type QuestionKind =
+  | "multiple_choice"
+  | "true_false"
+  | "short_answer"
+  | "numeric"
+  | "fill_in_blank"
+  | "ordering"
+  | "matching";
 export type QuestionStatus = "draft" | "published" | "archived";
 
 export interface AdminAnswerChoice {
   id?: string;
   label: string;
   isCorrect: boolean;
+  position?: number;
+}
+
+export interface AdminQuestionItem {
+  id?: string;
+  prompt: string;
+  answer: string;
+  acceptedAnswers: string[];
   position?: number;
 }
 
@@ -141,10 +156,13 @@ export interface AdminQuestion {
   prompt: string;
   explanation: string;
   expectedAnswer: string | null;
+  numericTolerance: number | null;
+  answerUnit: string | null;
   difficulty: number;
   xpReward: number;
   status: QuestionStatus;
   choices: AdminAnswerChoice[];
+  items: AdminQuestionItem[];
 }
 
 export interface AdminQuestionInput {
@@ -153,10 +171,126 @@ export interface AdminQuestionInput {
   prompt: string;
   explanation: string;
   expectedAnswer: string | null;
+  numericTolerance: number | null;
+  answerUnit: string | null;
   difficulty: number;
   xpReward: number;
   status: QuestionStatus;
   choices: AdminAnswerChoice[];
+  items: AdminQuestionItem[];
+}
+
+export type DailyChallengeStoredStatus = "draft" | "published";
+export type DailyChallengeEffectiveStatus = "draft" | "scheduled" | "active" | "finished";
+
+export interface AdminDailyChallengeQuestion {
+  id: string;
+  prompt: string;
+  kind: QuestionKind;
+  difficulty: number;
+  position: number;
+  theme: { id: string; title: string };
+  subject: Pick<AdminSubject, "id" | "name" | "icon">;
+}
+
+export interface AdminDailyChallenge {
+  id: string;
+  date: string;
+  title: string;
+  status: DailyChallengeStoredStatus;
+  effectiveStatus: DailyChallengeEffectiveStatus;
+  questionCount: number;
+  participantCount: number;
+  createdAt: string;
+  updatedAt: string;
+  questions: AdminDailyChallengeQuestion[];
+}
+
+export interface AdminDailyChallengeInput {
+  publicationDate: string;
+  title: string;
+  status: DailyChallengeStoredStatus;
+  questionIds: string[];
+}
+
+export interface AdminDailyQuestion {
+  id: string;
+  prompt: string;
+  kind: QuestionKind;
+  difficulty: number;
+  theme: { id: string; title: string };
+  schoolLevel: SchoolLevel;
+  subject: Pick<AdminSubject, "id" | "name" | "icon">;
+}
+
+export interface DailyChallengeChoice {
+  id: string;
+  label: string;
+}
+
+export interface DailyChallengeQuestion {
+  id: string;
+  kind: QuestionKind;
+  prompt: string;
+  difficulty: number;
+  position: number;
+  choices: DailyChallengeChoice[];
+  answerUnit: string | null;
+  blankCount: number;
+  orderingItems: Array<{ id: string; label: string }>;
+  matchingPrompts: Array<{ position: number; label: string }>;
+  matchingOptions: Array<{ id: string; label: string }>;
+}
+
+export interface DailyChallengeParticipation {
+  status: "available" | "in_progress" | "completed";
+  attemptId: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationSeconds: number | null;
+  score: number;
+  totalQuestions: number;
+  answers: Array<{ questionId: string; isCorrect: boolean }>;
+  currentStreak: number | null;
+}
+
+export interface DailyChallenge {
+  id: string;
+  date: string;
+  title: string;
+  questionCount: number;
+  estimatedMinutes: number;
+  questions: DailyChallengeQuestion[];
+  participation: DailyChallengeParticipation;
+}
+
+export interface DailyChallengeResponse {
+  challenge: DailyChallenge | null;
+}
+
+export interface DailyChallengeAnswerInput {
+  attemptId: string;
+  questionId: string;
+  answerChoiceId: string | null;
+  answerText: string | null;
+  blankAnswers: string[] | null;
+  orderedItemIds: string[] | null;
+  matches: Array<{ promptPosition: number; answerItemId: string }> | null;
+  responseTimeMs: number;
+}
+
+export interface DailyChallengeAnswerResponse {
+  feedback: {
+    correctAnswer: string;
+    explanation: string;
+    isCorrect: boolean;
+  };
+  progress: {
+    answered: number;
+    score: number;
+    total: number;
+    readyToFinish: boolean;
+  };
 }
 
 export interface LoginInput {
