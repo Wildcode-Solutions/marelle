@@ -163,7 +163,7 @@ function scheduleAutoContinue(): void {
 }
 
 function handleExerciseTransitionEntered(): void {
-  if (feedback.value) scheduleAutoContinue();
+  if (feedback.value?.isCorrect) scheduleAutoContinue();
 }
 
 async function finishChallenge(): Promise<void> {
