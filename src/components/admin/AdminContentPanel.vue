@@ -419,8 +419,9 @@ onMounted(loadWorkspace);
       </section>
     </div>
 
-    <div v-if="showThemeForm" class="admin-editor-overlay" @click.self="showThemeForm = false">
-      <form class="admin-editor" @submit.prevent="saveTheme">
+    <Teleport to="body">
+      <div v-if="showThemeForm" class="admin-editor-overlay" @click.self="showThemeForm = false">
+        <form class="admin-editor" @submit.prevent="saveTheme">
         <div class="admin-editor-heading">
           <div>
             <p class="eyebrow">Studio pédagogique</p>
@@ -470,11 +471,13 @@ onMounted(loadWorkspace);
             {{ isSaving ? "Enregistrement…" : "Enregistrer le thème" }}
           </button>
         </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </Teleport>
 
-    <div v-if="showQuestionForm" class="admin-editor-overlay" @click.self="showQuestionForm = false">
-      <form class="admin-editor admin-editor--wide" @submit.prevent="saveQuestion">
+    <Teleport to="body">
+      <div v-if="showQuestionForm" class="admin-editor-overlay" @click.self="showQuestionForm = false">
+        <form class="admin-editor admin-editor--wide" @submit.prevent="saveQuestion">
         <div class="admin-editor-heading">
           <div>
             <p class="eyebrow">{{ selectedTheme?.title }}</p>
@@ -682,7 +685,8 @@ onMounted(loadWorkspace);
             {{ isSaving ? "Enregistrement…" : "Enregistrer la question" }}
           </button>
         </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </Teleport>
   </section>
 </template>

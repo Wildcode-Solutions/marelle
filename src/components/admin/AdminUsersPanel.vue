@@ -202,8 +202,9 @@ onMounted(loadUsers);
       </section>
     </template>
 
-    <div v-if="editingUser" class="admin-editor-overlay" @click.self="cancelEditing">
-      <form class="admin-editor" @submit.prevent="saveUser">
+    <Teleport to="body">
+      <div v-if="editingUser" class="admin-editor-overlay" @click.self="cancelEditing">
+        <form class="admin-editor" @submit.prevent="saveUser">
         <div class="admin-editor-heading">
           <div>
             <p class="eyebrow">Modifier le compte</p>
@@ -245,7 +246,8 @@ onMounted(loadUsers);
             {{ isSaving ? "Enregistrement…" : "Enregistrer" }}
           </button>
         </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </Teleport>
   </section>
 </template>

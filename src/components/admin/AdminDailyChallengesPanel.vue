@@ -304,8 +304,9 @@ onMounted(loadWorkspace);
       </article>
     </div>
 
-    <div v-if="showForm" class="admin-editor-overlay" @click.self="showForm = false">
-      <form class="admin-editor admin-editor--wide daily-editor" @submit.prevent="saveChallenge">
+    <Teleport to="body">
+      <div v-if="showForm" class="admin-editor-overlay" @click.self="showForm = false">
+        <form class="admin-editor admin-editor--wide daily-editor" @submit.prevent="saveChallenge">
         <div class="admin-editor-heading">
           <div>
             <p class="eyebrow">Marelle du jour</p>
@@ -459,7 +460,8 @@ onMounted(loadWorkspace);
             {{ isSaving ? "Enregistrement…" : "Enregistrer la Marelle" }}
           </button>
         </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </Teleport>
   </section>
 </template>

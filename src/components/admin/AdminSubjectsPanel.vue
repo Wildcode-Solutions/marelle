@@ -142,8 +142,9 @@ onMounted(loadSubjects);
       <p v-else class="admin-empty">Aucune matière n’a encore été créée.</p>
     </template>
 
-    <div v-if="showForm" class="admin-editor-overlay" @click.self="closeForm">
-      <form class="admin-editor" @submit.prevent="saveSubject">
+    <Teleport to="body">
+      <div v-if="showForm" class="admin-editor-overlay" @click.self="closeForm">
+        <form class="admin-editor" @submit.prevent="saveSubject">
         <div class="admin-editor-heading">
           <div>
             <p class="eyebrow">Catalogue</p>
@@ -192,7 +193,8 @@ onMounted(loadSubjects);
             {{ isSaving ? "Enregistrement…" : "Enregistrer la matière" }}
           </button>
         </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </Teleport>
   </section>
 </template>

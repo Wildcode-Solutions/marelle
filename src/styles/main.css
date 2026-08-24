@@ -22,6 +22,8 @@
   --surface: rgba(255, 253, 241, 0.97);
   --outline: #7f9bb4;
   --shadow: 4px 5px 0 rgba(37, 57, 88, 0.14), 0 16px 34px rgba(55, 72, 51, 0.1);
+  --z-navigation: 10;
+  --z-modal: 1000;
 }
 
 * {
@@ -597,7 +599,7 @@ h3,
 
 .bottom-nav {
   position: fixed;
-  z-index: 10;
+  z-index: var(--z-navigation);
   right: 0;
   bottom: 0;
   left: 0;
@@ -1412,7 +1414,7 @@ h3,
 
 .admin-editor-overlay {
   position: fixed;
-  z-index: 30;
+  z-index: var(--z-modal);
   inset: 0;
   display: grid;
   place-items: center;
