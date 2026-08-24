@@ -16,8 +16,8 @@ const progressPercentage = computed(() => {
 <template>
   <section class="goal-card" aria-labelledby="daily-goal-title">
     <div class="goal-copy">
-      <p class="eyebrow">Objectif du jour</p>
-      <h2 id="daily-goal-title">Quelques minutes pour avancer</h2>
+      <p class="eyebrow">Le petit défi du jour</p>
+      <h2 id="daily-goal-title">Quelques minutes, puis c’est les vacances !</h2>
       <p>
         {{ progress.answeredQuestions > 0 ? `${progress.answeredQuestions} questions déjà tentées.` : "Ta série commence ici." }}
       </p>

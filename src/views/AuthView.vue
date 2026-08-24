@@ -65,11 +65,14 @@ async function submit(): Promise<void> {
     <section class="auth-card" aria-labelledby="auth-title">
       <div class="auth-brand" aria-label="Marelle">
         <span class="brand-mark" aria-hidden="true">M</span>
-        <span class="brand-name">marelle</span>
+        <span class="brand-copy">
+          <span class="brand-name">marelle</span>
+          <small>mon cahier de révisions</small>
+        </span>
       </div>
 
       <div class="auth-heading">
-        <p class="eyebrow">Ton espace de révision</p>
+        <p class="eyebrow">Première page du cahier</p>
         <h1 id="auth-title">{{ isRegister ? "Crée ton compte" : "Heureux de te revoir !" }}</h1>
         <p>
           {{

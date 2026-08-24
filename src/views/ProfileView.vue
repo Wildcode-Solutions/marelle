@@ -74,8 +74,8 @@ async function logout(): Promise<void> {
 <template>
   <div class="page inner-page">
     <ViewHeader
-      eyebrow="Ton espace"
-      title="Profil"
+      eyebrow="Sur la première page"
+      title="Ce cahier appartient à…"
       description="Retrouve les informations liées à ton compte Marelle."
     />
 

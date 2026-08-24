@@ -5,8 +5,8 @@ import ViewHeader from "@/components/ViewHeader.vue";
 <template>
   <div class="page inner-page">
     <ViewHeader
-      eyebrow="Tes efforts paient"
-      title="Progression"
+      eyebrow="Les bons points s’additionnent"
+      title="Mon carnet de progrès"
       description="Retrouve bientôt ici tes acquis, tes séries et les notions à revoir."
     />
 

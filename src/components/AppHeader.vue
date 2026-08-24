@@ -10,7 +10,10 @@ defineProps<{
   <header class="topbar">
     <div class="brand" aria-label="Marelle">
       <span class="brand-mark" aria-hidden="true">M</span>
-      <span class="brand-name">marelle</span>
+      <span class="brand-copy">
+        <span class="brand-name">marelle</span>
+        <small>cahier de révisions</small>
+      </span>
     </div>
 
     <div class="topbar-stats" aria-label="Résumé de progression">

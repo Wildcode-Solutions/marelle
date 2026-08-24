@@ -55,8 +55,8 @@ onMounted(loadDashboard);
 
     <section class="welcome-block">
       <div>
-        <p class="eyebrow">Bonjour {{ dashboard.user.displayName }} 👋</p>
-        <h1>Prêt·e à faire un petit pas&nbsp;?</h1>
+        <p class="eyebrow">Bonjour {{ dashboard.user.displayName }} · à ton crayon !</p>
+        <h1>On ouvre le cahier&nbsp;?</h1>
       </div>
       <span class="level-badge">Niveau {{ dashboard.user.level }}</span>
     </section>
@@ -84,8 +84,8 @@ onMounted(loadDashboard);
     <section class="section-block" aria-labelledby="subjects-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">À toi de choisir</p>
-          <h2 id="subjects-title">Tes matières</h2>
+          <p class="eyebrow">Choisis ton intercalaire</p>
+          <h2 id="subjects-title">Au programme</h2>
         </div>
         <RouterLink to="/matieres">Tout voir</RouterLink>
       </div>

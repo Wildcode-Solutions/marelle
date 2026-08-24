@@ -25,9 +25,9 @@ onMounted(async () => {
 <template>
   <div class="page inner-page">
     <ViewHeader
-      :eyebrow="`Parcours de ${auth.user.value?.schoolLevel.label ?? '6e'}`"
-      title="Choisis une matière"
-      description="Avance chapitre par chapitre, à ton rythme."
+      :eyebrow="`Sommaire · ${auth.user.value?.schoolLevel.label ?? '6e'}`"
+      title="Quel cahier ouvre-t-on ?"
+      description="Choisis une matière et avance exercice après exercice, à ton rythme."
     />
 
     <p v-if="isLoading" class="notice">Chargement des matières…</p>
