@@ -3,10 +3,8 @@ import { computed, readonly, ref } from "vue";
 import { api, ApiError } from "@/services/api";
 import type {
   AuthUser,
-  DeleteAccountInput,
   LoginInput,
   RegisterInput,
-  UpdateEmailInput,
   UpdatePasswordInput,
   UpdateProfileInput,
 } from "@/types/domain";
@@ -47,17 +45,8 @@ async function updateProfile(input: UpdateProfileInput): Promise<void> {
   currentUser.value = (await api.auth.updateProfile(input)).user;
 }
 
-async function updateEmail(input: UpdateEmailInput): Promise<void> {
-  currentUser.value = (await api.auth.updateEmail(input)).user;
-}
-
 async function updatePassword(input: UpdatePasswordInput): Promise<void> {
   await api.auth.updatePassword(input);
-}
-
-async function deleteAccount(input: DeleteAccountInput): Promise<void> {
-  await api.auth.deleteAccount(input);
-  currentUser.value = null;
 }
 
 async function logout(): Promise<void> {
@@ -71,14 +60,12 @@ function clear(): void {
 
 export const auth = {
   clear,
-  deleteAccount,
   initialize,
   isAuthenticated: computed(() => currentUser.value !== null),
   isInitializing: readonly(isInitializing),
   login,
   logout,
   register,
-  updateEmail,
   updatePassword,
   updateProfile,
   user: readonly(currentUser),

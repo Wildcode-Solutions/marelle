@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { Capacitor } from "@capacitor/core";
 
+import EmojiPicker from "@/components/EmojiPicker.vue";
 import ViewHeader from "@/components/ViewHeader.vue";
 import { api, ApiError } from "@/services/api";
 import { auth } from "@/services/auth";
@@ -9,7 +11,6 @@ import type { ProfileResponse, SchoolLevel } from "@/types/domain";
 
 const router = useRouter();
 
-const avatarOptions = ["🧑‍🎓", "🧑‍🚀", "🦊", "🐼", "🐸", "🦁", "🐙", "🦄"];
 const colorOptions = [
   { label: "Violet", value: "#6C5CE7" },
   { label: "Bleu", value: "#315F9E" },
@@ -33,12 +34,10 @@ const identityForm = reactive({
 const isSavingIdentity = ref(false);
 const identityMessage = ref("");
 const identityError = ref("");
-
-const email = ref("");
-const emailPassword = ref("");
-const isSavingEmail = ref(false);
-const emailMessage = ref("");
-const emailError = ref("");
+const avatarError = ref("");
+const showWebEmojiPicker = ref(false);
+const usesWebEmojiPicker = !Capacitor.isNativePlatform()
+  && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
 const currentPassword = ref("");
 const newPassword = ref("");
@@ -46,11 +45,6 @@ const newPasswordConfirmation = ref("");
 const isSavingPassword = ref(false);
 const passwordMessage = ref("");
 const passwordError = ref("");
-
-const deletionPassword = ref("");
-const deletionConfirmation = ref("");
-const isDeletingAccount = ref(false);
-const deletionError = ref("");
 
 const isLoggingOut = ref(false);
 const logoutError = ref("");
@@ -70,10 +64,6 @@ const unlockedBadgeCount = computed(
   () => profile.value?.badges.filter((badge) => badge.unlocked).length ?? 0,
 );
 
-const canDeleteAccount = computed(
-  () => deletionConfirmation.value === "SUPPRIMER" && deletionPassword.value.length >= 8,
-);
-
 watch(
   () => auth.user.value,
   (user) => {
@@ -82,13 +72,45 @@ watch(
     identityForm.avatarEmoji = user.avatarEmoji;
     identityForm.profileColor = user.profileColor;
     identityForm.schoolLevelId = user.schoolLevel.id;
-    email.value = user.email;
   },
   { immediate: true },
 );
 
 function messageFor(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
+}
+
+const emojiSegmenter = new Intl.Segmenter("fr", { granularity: "grapheme" });
+const emojiPattern = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3)/u;
+
+function selectAvatarInput(event: FocusEvent): void {
+  (event.currentTarget as HTMLInputElement).select();
+  if (usesWebEmojiPicker) showWebEmojiPicker.value = true;
+}
+
+function chooseAvatar(event: Event): void {
+  const input = event.currentTarget as HTMLInputElement;
+  const emojis = Array.from(
+    emojiSegmenter.segment(input.value),
+    ({ segment }) => segment,
+  ).filter((segment) => emojiPattern.test(segment));
+  const avatar = emojis.at(-1);
+
+  if (!avatar) {
+    input.value = identityForm.avatarEmoji;
+    avatarError.value = "Choisis un emoji depuis le clavier de ton appareil.";
+    return;
+  }
+
+  identityForm.avatarEmoji = avatar;
+  input.value = avatar;
+  avatarError.value = "";
+}
+
+function chooseWebAvatar(emoji: string): void {
+  identityForm.avatarEmoji = emoji;
+  avatarError.value = "";
+  showWebEmojiPicker.value = false;
 }
 
 async function loadProfile(): Promise<void> {
@@ -131,21 +153,6 @@ async function saveIdentity(): Promise<void> {
   }
 }
 
-async function saveEmail(): Promise<void> {
-  emailMessage.value = "";
-  emailError.value = "";
-  isSavingEmail.value = true;
-  try {
-    await auth.updateEmail({ email: email.value, currentPassword: emailPassword.value });
-    emailPassword.value = "";
-    emailMessage.value = "Ton adresse e-mail a bien été mise à jour.";
-  } catch (error) {
-    emailError.value = messageFor(error, "La mise à jour de l’adresse e-mail a échoué.");
-  } finally {
-    isSavingEmail.value = false;
-  }
-}
-
 async function savePassword(): Promise<void> {
   passwordMessage.value = "";
   passwordError.value = "";
@@ -168,24 +175,6 @@ async function savePassword(): Promise<void> {
     passwordError.value = messageFor(error, "La modification du mot de passe a échoué.");
   } finally {
     isSavingPassword.value = false;
-  }
-}
-
-async function deleteAccount(): Promise<void> {
-  if (!canDeleteAccount.value) return;
-  const confirmed = window.confirm(
-    "Cette action supprimera définitivement ton compte et toute ta progression. Continuer ?",
-  );
-  if (!confirmed) return;
-
-  deletionError.value = "";
-  isDeletingAccount.value = true;
-  try {
-    await auth.deleteAccount({ currentPassword: deletionPassword.value });
-    await router.replace({ name: "login" });
-  } catch (error) {
-    deletionError.value = messageFor(error, "La suppression du compte a échoué.");
-    isDeletingAccount.value = false;
   }
 }
 
@@ -260,16 +249,49 @@ onMounted(loadProfile);
         <fieldset class="profile-choice-field">
           <legend>Choisis ton avatar</legend>
           <div class="avatar-picker">
-            <button
-              v-for="avatar in avatarOptions"
-              :key="avatar"
-              type="button"
-              :class="{ 'avatar-picker__option--selected': identityForm.avatarEmoji === avatar }"
-              :aria-label="`Choisir l’avatar ${avatar}`"
-              :aria-pressed="identityForm.avatarEmoji === avatar"
-              @click="identityForm.avatarEmoji = avatar"
-            >{{ avatar }}</button>
+            <span class="avatar-picker__preview" aria-hidden="true">
+              {{ identityForm.avatarEmoji }}
+            </span>
+            <label class="avatar-picker__control" for="avatarEmoji">
+              <span>{{ usesWebEmojiPicker ? "Clique ici pour choisir un emoji" : "Touche ici pour choisir un emoji" }}</span>
+              <input
+                id="avatarEmoji"
+                name="avatarEmoji"
+                type="text"
+                inputmode="text"
+                enterkeyhint="done"
+                autocomplete="off"
+                autocapitalize="off"
+                :spellcheck="false"
+                :value="identityForm.avatarEmoji"
+                aria-describedby="avatar-help"
+                @focus="selectAvatarInput"
+                @input="chooseAvatar"
+              />
+              <small id="avatar-help">
+                {{ usesWebEmojiPicker
+                  ? "Le sélecteur complet s’ouvre automatiquement."
+                  : "Ouvre le clavier emoji de ton téléphone pour accéder à tous tes emojis." }}
+              </small>
+            </label>
           </div>
+          <button
+            v-if="usesWebEmojiPicker"
+            class="emoji-picker-toggle"
+            type="button"
+            aria-controls="web-emoji-picker"
+            :aria-expanded="showWebEmojiPicker"
+            @click="showWebEmojiPicker = !showWebEmojiPicker"
+          >
+            <span aria-hidden="true">😀</span>
+            {{ showWebEmojiPicker ? "Fermer le choix des emojis" : "Afficher tous les emojis" }}
+          </button>
+          <div v-if="showWebEmojiPicker" id="web-emoji-picker" class="emoji-picker-panel">
+            <EmojiPicker @select="chooseWebAvatar" />
+          </div>
+          <p v-if="avatarError" class="form-error avatar-picker__error" role="alert">
+            {{ avatarError }}
+          </p>
         </fieldset>
 
         <fieldset class="profile-choice-field">
@@ -393,32 +415,6 @@ onMounted(loadProfile);
       </div>
 
       <div class="account-settings">
-        <form class="account-setting-card" @submit.prevent="saveEmail">
-          <h3>Adresse e-mail</h3>
-          <p>Ton mot de passe actuel est demandé pour confirmer le changement.</p>
-          <label class="form-field">
-            <span>Nouvelle adresse e-mail</span>
-            <input v-model="email" name="email" type="email" autocomplete="email" maxlength="254" required />
-          </label>
-          <label class="form-field">
-            <span>Mot de passe actuel</span>
-            <input
-              v-model="emailPassword"
-              name="currentPassword"
-              type="password"
-              autocomplete="current-password"
-              minlength="8"
-              maxlength="128"
-              required
-            />
-          </label>
-          <p v-if="emailMessage" class="form-success" role="status">{{ emailMessage }}</p>
-          <p v-if="emailError" class="form-error" role="alert">{{ emailError }}</p>
-          <button class="secondary-button" type="submit" :disabled="isSavingEmail">
-            {{ isSavingEmail ? "Enregistrement…" : "Modifier mon e-mail" }}
-          </button>
-        </form>
-
         <form class="account-setting-card" @submit.prevent="savePassword">
           <h3>Mot de passe</h3>
           <p>Après la modification, les autres appareils seront déconnectés.</p>
@@ -472,45 +468,6 @@ onMounted(loadProfile);
           {{ isLoggingOut ? "Déconnexion…" : "Se déconnecter" }}
         </button>
       </div>
-
-      <details class="danger-zone">
-        <summary>Supprimer mon compte</summary>
-        <div class="danger-zone__content">
-          <p>Cette action supprime définitivement ton profil, tes scores et tous tes badges.</p>
-          <form class="profile-form" @submit.prevent="deleteAccount">
-            <label class="form-field">
-              <span>Écris SUPPRIMER pour confirmer</span>
-              <input
-                v-model="deletionConfirmation"
-                name="deletionConfirmation"
-                autocomplete="off"
-                placeholder="SUPPRIMER"
-                required
-              />
-            </label>
-            <label class="form-field">
-              <span>Mot de passe actuel</span>
-              <input
-                v-model="deletionPassword"
-                name="deletionPassword"
-                type="password"
-                autocomplete="current-password"
-                minlength="8"
-                maxlength="128"
-                required
-              />
-            </label>
-            <p v-if="deletionError" class="form-error" role="alert">{{ deletionError }}</p>
-            <button
-              class="danger-button"
-              type="submit"
-              :disabled="!canDeleteAccount || isDeletingAccount"
-            >
-              {{ isDeletingAccount ? "Suppression…" : "Supprimer définitivement mon compte" }}
-            </button>
-          </form>
-        </div>
-      </details>
     </section>
   </div>
 </template>

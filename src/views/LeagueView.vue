@@ -1,26 +1,5 @@
 <template>
   <div class="league-view">
-    <!-- Header -->
-    <div
-      class="league-header"
-      :style="{ background: headerGradient }"
-    >
-      <button class="league-header__back" @click="$router.back()">
-        <span>‹</span>
-      </button>
-      <div class="league-header__info">
-        <span class="league-header__icon">{{ data?.leagueIcon ?? "⚙️" }}</span>
-        <div>
-          <h1 class="league-header__title">Ligue {{ data?.leagueName }}</h1>
-          <p class="league-header__subtitle">{{ weekLabel }}</p>
-        </div>
-      </div>
-      <div v-if="data" class="league-header__myrank">
-        <span class="league-header__myrank-num">{{ data.currentUserRank ?? "—" }}</span>
-        <span class="league-header__myrank-total">/ {{ data.totalMembers }}</span>
-      </div>
-    </div>
-
     <!-- Loading skeleton -->
     <div v-if="loading" class="league-skeleton">
       <div v-for="i in 10" :key="i" class="league-skeleton__row">
@@ -188,20 +167,6 @@ watch(showHistory, async (val) => {
       historyLoading.value = false;
     }
   }
-});
-
-const headerGradient = computed(() => {
-  const color = data.value?.leagueColor ?? "#4C51BF";
-  return `linear-gradient(135deg, ${color}ee 0%, ${color}88 100%)`;
-});
-
-const weekLabel = computed(() => {
-  if (!data.value) return "";
-  const start = new Date(data.value.weekStart);
-  const end = new Date(data.value.weekEnd);
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
-  return `${fmt(start)} au ${fmt(end)}`;
 });
 
 const myZone = computed(() => {

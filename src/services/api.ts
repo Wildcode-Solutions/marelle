@@ -19,7 +19,6 @@ import type {
   DailyChallengeAnswerResponse,
   DailyChallengeResponse,
   DashboardData,
-  DeleteAccountInput,
   LeagueHistoryResponse,
   LeagueLeaderboardResponse,
   LeagueMe,
@@ -30,7 +29,6 @@ import type {
   SchoolLevelsResponse,
   SubjectSummary,
   UpdateAdminUserInput,
-  UpdateEmailInput,
   UpdatePasswordInput,
   UpdateProfileInput,
   UserRole,
@@ -173,15 +171,8 @@ export const api = {
     logout: () => postJson<{ success: true }>("/api/auth/logout"),
     updateProfile: (input: UpdateProfileInput) =>
       patchJson<AuthResponse>("/api/auth/me", input),
-    updateEmail: (input: UpdateEmailInput) =>
-      patchJson<AuthResponse>("/api/account/email", input),
     updatePassword: (input: UpdatePasswordInput) =>
       patchJson<{ success: true }>("/api/account/password", input),
-    deleteAccount: (input: DeleteAccountInput) =>
-      requestJson<{ success: true }>("/api/account", {
-        method: "DELETE",
-        body: JSON.stringify(input),
-      }),
   },
   schoolLevels: () => requestJson<SchoolLevelsResponse>("/api/school-levels"),
   league: {

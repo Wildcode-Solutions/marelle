@@ -30,18 +30,9 @@ export interface UpdateProfileInput {
   schoolLevelId?: string;
 }
 
-export interface UpdateEmailInput {
-  currentPassword: string;
-  email: string;
-}
-
 export interface UpdatePasswordInput {
   currentPassword: string;
   newPassword: string;
-}
-
-export interface DeleteAccountInput {
-  currentPassword: string;
 }
 
 export interface ProfileStats {

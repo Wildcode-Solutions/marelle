@@ -67,7 +67,6 @@ function validateDisplayName(displayName: string): void {
   }
 }
 
-const AVATAR_OPTIONS = new Set(["🧑‍🎓", "🧑‍🚀", "🦊", "🐼", "🐸", "🦁", "🐙", "🦄"]);
 const PROFILE_COLOR_OPTIONS = new Set([
   "#6C5CE7",
   "#315F9E",
@@ -87,10 +86,21 @@ function normalizedDisplayName(value: unknown): string {
 }
 
 function validatedAvatar(value: unknown): string {
-  if (typeof value !== "string" || !AVATAR_OPTIONS.has(value)) {
+  if (typeof value !== "string") {
     throw new HttpError(400, "L’avatar sélectionné est invalide.");
   }
-  return value;
+
+  const avatar = value.trim();
+  const graphemes = Array.from(
+    new Intl.Segmenter("fr", { granularity: "grapheme" }).segment(avatar),
+    ({ segment }) => segment,
+  );
+  const isEmoji = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3)/u;
+
+  if (graphemes.length !== 1 || !isEmoji.test(avatar)) {
+    throw new HttpError(400, "L’avatar sélectionné est invalide.");
+  }
+  return avatar;
 }
 
 function validatedProfileColor(value: unknown): string {

@@ -21,10 +21,6 @@ defineProps<{
         <span aria-hidden="true">🔥</span>
         <strong>{{ user.currentStreak }}</strong>
       </span>
-      <span class="stat-pill" :title="`${user.lives} vies restantes`">
-        <span aria-hidden="true">💜</span>
-        <strong>{{ user.lives }}</strong>
-      </span>
       <span
         class="avatar"
         :style="{ '--avatar-color': user.profileColor }"

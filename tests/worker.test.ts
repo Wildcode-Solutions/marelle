@@ -459,7 +459,7 @@ describe("Marelle Worker API", () => {
       headers: { Cookie: cookie },
       body: JSON.stringify({
         displayName: "Lou des étoiles",
-        avatarEmoji: "🦄",
+        avatarEmoji: "🧑🏽‍🚀",
         profileColor: "#F06292",
         schoolLevelId: "4e",
       }),
@@ -468,7 +468,7 @@ describe("Marelle Worker API", () => {
     await expect(customizationResponse.json()).resolves.toMatchObject({
       user: {
         displayName: "Lou des étoiles",
-        avatarEmoji: "🦄",
+        avatarEmoji: "🧑🏽‍🚀",
         profileColor: "#F06292",
         schoolLevel: { id: "4e", label: "4e" },
       },
