@@ -5,6 +5,7 @@ interface UserRow {
   role: "student" | "admin";
   display_name: string;
   avatar_emoji: string;
+  profile_color: string;
   school_level_id: string;
   school_level_label: string;
   xp: number;
@@ -78,6 +79,7 @@ export async function dashboard(
       u.role,
       u.display_name,
       u.avatar_emoji,
+      u.profile_color,
       u.school_level_id,
       l.label AS school_level_label,
       u.xp,
@@ -136,6 +138,7 @@ export async function dashboard(
       role: user.role,
       displayName: user.display_name,
       avatarEmoji: user.avatar_emoji,
+      profileColor: user.profile_color,
       schoolLevel: {
         id: user.school_level_id,
         label: user.school_level_label,

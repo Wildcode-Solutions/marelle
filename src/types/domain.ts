@@ -11,6 +11,7 @@ export interface AuthUser {
   role: UserRole;
   displayName: string;
   avatarEmoji: string;
+  profileColor: string;
   schoolLevel: SchoolLevel;
 }
 
@@ -23,7 +24,92 @@ export interface SchoolLevelsResponse {
 }
 
 export interface UpdateProfileInput {
-  schoolLevelId: string;
+  avatarEmoji?: string;
+  displayName?: string;
+  profileColor?: string;
+  schoolLevelId?: string;
+}
+
+export interface UpdateEmailInput {
+  currentPassword: string;
+  email: string;
+}
+
+export interface UpdatePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface DeleteAccountInput {
+  currentPassword: string;
+}
+
+export interface ProfileStats {
+  bestScorePercentage: number;
+  completedChallenges: number;
+  currentStreak: number;
+  level: number;
+  longestStreak: number;
+  xp: number;
+}
+
+export interface ProfileBadge {
+  description: string;
+  icon: string;
+  id: string;
+  name: string;
+  slug: string;
+  unlocked: boolean;
+  unlockedAt: string | null;
+}
+
+export interface ProfileResponse {
+  badges: ProfileBadge[];
+  stats: ProfileStats;
+}
+
+export interface ProgressionDay {
+  answeredQuestions: number;
+  completedSessions: number;
+  correctAnswers: number;
+  date: string;
+  earnedXp: number;
+  goalReached: boolean;
+}
+
+export interface ProgressionMistake {
+  attempts: number;
+  chapterTitle: string;
+  correctAnswer: string;
+  correctAnswers: number;
+  explanation: string;
+  lastAnsweredAt: string;
+  prompt: string;
+  questionId: string;
+  subject: {
+    color: string;
+    icon: string;
+    name: string;
+  };
+}
+
+export interface ProgressionChallengeHistory {
+  challengeId: string;
+  completedAt: string;
+  date: string;
+  durationSeconds: number | null;
+  id: string;
+  percentage: number;
+  score: number;
+  title: string;
+  totalQuestions: number;
+}
+
+export interface ProgressionResponse {
+  activity: ProgressionDay[];
+  history: ProgressionChallengeHistory[];
+  mistakes: ProgressionMistake[];
+  today: string;
 }
 
 export interface AdminOverview {
@@ -307,6 +393,7 @@ export interface UserSummary {
   role: UserRole;
   displayName: string;
   avatarEmoji: string;
+  profileColor: string;
   schoolLevel: SchoolLevel;
   xp: number;
   level: number;

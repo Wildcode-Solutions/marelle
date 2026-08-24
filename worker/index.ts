@@ -23,7 +23,17 @@ import {
   updateAdminSubject,
 } from "./routes/admin-subjects";
 import { adminOverview } from "./routes/admin";
-import { login, logout, me, register, schoolLevels, updateProfile } from "./routes/auth";
+import {
+  deleteAccount,
+  login,
+  logout,
+  me,
+  register,
+  schoolLevels,
+  updateEmail,
+  updatePassword,
+  updateProfile,
+} from "./routes/auth";
 import { dashboard } from "./routes/dashboard";
 import {
   answerDailyChallenge,
@@ -32,6 +42,8 @@ import {
   startDailyChallenge,
 } from "./routes/daily-challenge";
 import { subjects } from "./routes/subjects";
+import { profileSummary } from "./routes/profile";
+import { progression } from "./routes/progression";
 
 function methodNotAllowed(request: Request, methods: string[]): Response {
   return json(request, { error: "Method not allowed" }, {
@@ -124,6 +136,36 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         return updateProfile(request, env, user);
       }
       return methodNotAllowed(request, ["GET", "PATCH"]);
+    }
+
+    case "/api/account/email": {
+      if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+      const user = await requireSessionUser(request, env);
+      return updateEmail(request, env, user);
+    }
+
+    case "/api/account/password": {
+      if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+      const user = await requireSessionUser(request, env);
+      return updatePassword(request, env, user);
+    }
+
+    case "/api/account": {
+      if (request.method !== "DELETE") return methodNotAllowed(request, ["DELETE"]);
+      const user = await requireSessionUser(request, env);
+      return deleteAccount(request, env, user);
+    }
+
+    case "/api/profile": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return profileSummary(request, env, user.id);
+    }
+
+    case "/api/progression": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return progression(request, env, user.id);
     }
 
     case "/api/school-levels":

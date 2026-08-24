@@ -606,6 +606,28 @@ export async function finishDailyChallenge(
        WHERE id = ?2 AND ${completionGuard}`,
     ).bind(attempt.id, userId, stats.xp_earned, activityDate),
     env.DB.prepare(
+      `INSERT OR IGNORE INTO user_achievements (user_id, achievement_id)
+       SELECT ?2, 'first-step'
+       WHERE ${completionGuard}`,
+    ).bind(attempt.id, userId),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO user_achievements (user_id, achievement_id)
+       SELECT ?2, 'perfect-round'
+       WHERE ${completionGuard} AND ?3 = ?4`,
+    ).bind(attempt.id, userId, stats.correct, attempt.total_questions),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO user_achievements (user_id, achievement_id)
+       SELECT ?2, 'xp-century'
+       WHERE ${completionGuard}
+         AND EXISTS (SELECT 1 FROM users WHERE id = ?2 AND xp >= 100)`,
+    ).bind(attempt.id, userId),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO user_achievements (user_id, achievement_id)
+       SELECT ?2, 'week-streak'
+       WHERE ${completionGuard}
+         AND EXISTS (SELECT 1 FROM users WHERE id = ?2 AND longest_streak >= 7)`,
+    ).bind(attempt.id, userId),
+    env.DB.prepare(
       `UPDATE daily_challenge_attempts
        SET
          score = ?3,

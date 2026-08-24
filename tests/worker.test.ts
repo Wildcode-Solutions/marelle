@@ -48,6 +48,12 @@ describe("Marelle Worker API", () => {
     await expect(adminResponse.json()).resolves.toEqual({
       error: "Authentification requise.",
     });
+
+    const profileResponse = await request("/api/profile");
+    expect(profileResponse.status).toBe(401);
+
+    const progressionResponse = await request("/api/progression");
+    expect(progressionResponse.status).toBe(401);
   });
 
   it("handles the complete account and session lifecycle in D1", async () => {
@@ -422,6 +428,134 @@ describe("Marelle Worker API", () => {
     expect(revokedResponse.status).toBe(401);
   });
 
+  it("personalizes a profile and securely manages the account", async () => {
+    const email = `profil-${crypto.randomUUID()}@marelle.test`;
+    const updatedEmail = `profil-modifie-${crypto.randomUUID()}@marelle.test`;
+    const newPassword = "Nouvelle-Marelle-2026!";
+    const registerResponse = await request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "Lou",
+        email,
+        password: testPassword,
+      }),
+    });
+    expect(registerResponse.status).toBe(201);
+    const cookie = cookieFrom(registerResponse);
+    const registerBody = await registerResponse.json<{
+      user: { id: string; profileColor: string };
+    }>();
+    expect(registerBody.user.profileColor).toBe("#6C5CE7");
+
+    const invalidAvatarResponse = await request("/api/auth/me", {
+      method: "PATCH",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ avatarEmoji: "invalide" }),
+    });
+    expect(invalidAvatarResponse.status).toBe(400);
+
+    const customizationResponse = await request("/api/auth/me", {
+      method: "PATCH",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({
+        displayName: "Lou des étoiles",
+        avatarEmoji: "🦄",
+        profileColor: "#F06292",
+        schoolLevelId: "4e",
+      }),
+    });
+    expect(customizationResponse.status).toBe(200);
+    await expect(customizationResponse.json()).resolves.toMatchObject({
+      user: {
+        displayName: "Lou des étoiles",
+        avatarEmoji: "🦄",
+        profileColor: "#F06292",
+        schoolLevel: { id: "4e", label: "4e" },
+      },
+    });
+
+    const profileResponse = await request("/api/profile", {
+      headers: { Cookie: cookie },
+    });
+    expect(profileResponse.status).toBe(200);
+    const profileBody = await profileResponse.json<{
+      badges: Array<{ id: string; unlocked: boolean }>;
+      stats: {
+        bestScorePercentage: number;
+        completedChallenges: number;
+        currentStreak: number;
+        longestStreak: number;
+        xp: number;
+      };
+    }>();
+    expect(profileBody.stats).toEqual({
+      xp: 0,
+      level: 1,
+      currentStreak: 0,
+      longestStreak: 0,
+      completedChallenges: 0,
+      bestScorePercentage: 0,
+    });
+    expect(profileBody.badges).toHaveLength(4);
+    expect(profileBody.badges.every((badge) => !badge.unlocked)).toBe(true);
+
+    const wrongPasswordEmailResponse = await request("/api/account/email", {
+      method: "PATCH",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ email: updatedEmail, currentPassword: "Mauvais-2026!" }),
+    });
+    expect(wrongPasswordEmailResponse.status).toBe(401);
+
+    const emailResponse = await request("/api/account/email", {
+      method: "PATCH",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ email: updatedEmail, currentPassword: testPassword }),
+    });
+    expect(emailResponse.status).toBe(200);
+    await expect(emailResponse.json()).resolves.toMatchObject({
+      user: { id: registerBody.user.id, email: updatedEmail },
+    });
+
+    const passwordResponse = await request("/api/account/password", {
+      method: "PATCH",
+      headers: { Cookie: cookie },
+      body: JSON.stringify({ currentPassword: testPassword, newPassword }),
+    });
+    expect(passwordResponse.status).toBe(200);
+    const renewedCookie = cookieFrom(passwordResponse);
+
+    const revokedOldSessionResponse = await request("/api/auth/me", {
+      headers: { Cookie: cookie },
+    });
+    expect(revokedOldSessionResponse.status).toBe(401);
+
+    const oldPasswordLoginResponse = await request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: updatedEmail, password: testPassword }),
+    });
+    expect(oldPasswordLoginResponse.status).toBe(401);
+
+    const wrongDeleteResponse = await request("/api/account", {
+      method: "DELETE",
+      headers: { Cookie: renewedCookie },
+      body: JSON.stringify({ currentPassword: testPassword }),
+    });
+    expect(wrongDeleteResponse.status).toBe(401);
+
+    const deleteResponse = await request("/api/account", {
+      method: "DELETE",
+      headers: { Cookie: renewedCookie },
+      body: JSON.stringify({ currentPassword: newPassword }),
+    });
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.headers.get("Set-Cookie")).toContain("Max-Age=0");
+
+    const deletedUser = await env.DB.prepare("SELECT id FROM users WHERE id = ?1")
+      .bind(registerBody.user.id)
+      .first<{ id: string }>();
+    expect(deletedUser).toBeNull();
+  });
+
   it("manages and completes one shared daily challenge without exposing answers", async () => {
     const adminEmail = `admin-marelle-${crypto.randomUUID()}@marelle.test`;
     const registerResponse = await request("/api/auth/register", {
@@ -694,6 +828,70 @@ describe("Marelle Worker API", () => {
     });
     expect(finishBody.challenge.participation.durationSeconds).toBeGreaterThanOrEqual(0);
 
+    const profileResponse = await request("/api/profile", {
+      headers: { Cookie: cookie },
+    });
+    await expect(profileResponse.json()).resolves.toMatchObject({
+      stats: { completedChallenges: 1, bestScorePercentage: 66 },
+      badges: expect.arrayContaining([
+        expect.objectContaining({ id: "first-step", unlocked: true }),
+        expect.objectContaining({ id: "perfect-round", unlocked: false }),
+      ]),
+    });
+
+    const progressionResponse = await request("/api/progression", {
+      headers: { Cookie: cookie },
+    });
+    expect(progressionResponse.status).toBe(200);
+    const progressionBody = await progressionResponse.json<{
+      activity: Array<{
+        answeredQuestions: number;
+        correctAnswers: number;
+        date: string;
+        earnedXp: number;
+        goalReached: boolean;
+      }>;
+      history: Array<{
+        challengeId: string;
+        percentage: number;
+        score: number;
+        totalQuestions: number;
+      }>;
+      mistakes: Array<{
+        correctAnswer: string;
+        explanation: string;
+        questionId: string;
+        subject: { name: string };
+      }>;
+      today: string;
+    }>();
+    expect(progressionBody.today).toBe(publicationDate);
+    expect(progressionBody.activity).toHaveLength(60);
+    expect(progressionBody.activity.at(-1)).toEqual({
+      date: publicationDate,
+      earnedXp: 22,
+      completedSessions: 1,
+      answeredQuestions: 3,
+      correctAnswers: 2,
+      goalReached: true,
+    });
+    expect(progressionBody.mistakes).toEqual([
+      expect.objectContaining({
+        questionId: "q-french-noun",
+        correctAnswer: "chat",
+        explanation: expect.stringContaining("nom commun"),
+        subject: expect.objectContaining({ name: "Français" }),
+      }),
+    ]);
+    expect(progressionBody.history).toEqual([
+      expect.objectContaining({
+        challengeId: createBody.challenge.id,
+        score: 2,
+        totalQuestions: 3,
+        percentage: 67,
+      }),
+    ]);
+
     const restartResponse = await request("/api/daily-challenge/start", {
       method: "POST",
       headers: { Cookie: cookie },
@@ -932,6 +1130,35 @@ describe("Marelle Worker API", () => {
       challenge: {
         participation: { status: "completed", score: 5, totalQuestions: 5 },
       },
+    });
+
+    const profileResponse = await request("/api/profile", {
+      headers: { Cookie: cookie },
+    });
+    await expect(profileResponse.json()).resolves.toMatchObject({
+      stats: { completedChallenges: 1, bestScorePercentage: 100 },
+      badges: expect.arrayContaining([
+        expect.objectContaining({ id: "perfect-round", unlocked: true }),
+      ]),
+    });
+
+    await env.DB.prepare(
+      `UPDATE user_question_progress
+       SET status = 'review'
+       WHERE user_id = ?1 AND question_id = ?2`,
+    )
+      .bind(registerBody.user.id, matching.id)
+      .run();
+    const progressionResponse = await request("/api/progression", {
+      headers: { Cookie: cookie },
+    });
+    await expect(progressionResponse.json()).resolves.toMatchObject({
+      mistakes: [
+        expect.objectContaining({
+          questionId: matching.id,
+          correctAnswer: "France → Paris · Italie → Rome",
+        }),
+      ],
     });
   });
 

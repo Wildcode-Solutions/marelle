@@ -19,11 +19,16 @@ import type {
   DailyChallengeAnswerResponse,
   DailyChallengeResponse,
   DashboardData,
+  DeleteAccountInput,
   LoginInput,
+  ProfileResponse,
+  ProgressionResponse,
   RegisterInput,
   SchoolLevelsResponse,
   SubjectSummary,
   UpdateAdminUserInput,
+  UpdateEmailInput,
+  UpdatePasswordInput,
   UpdateProfileInput,
   UserRole,
 } from "@/types/domain";
@@ -146,6 +151,8 @@ export const api = {
       ),
   },
   dashboard: () => requestJson<DashboardData>("/api/dashboard"),
+  profile: () => requestJson<ProfileResponse>("/api/profile"),
+  progression: () => requestJson<ProgressionResponse>("/api/progression"),
   dailyChallenge: {
     current: () => requestJson<DailyChallengeResponse>("/api/daily-challenge"),
     start: () => postJson<DailyChallengeResponse>("/api/daily-challenge/start"),
@@ -163,6 +170,15 @@ export const api = {
     logout: () => postJson<{ success: true }>("/api/auth/logout"),
     updateProfile: (input: UpdateProfileInput) =>
       patchJson<AuthResponse>("/api/auth/me", input),
+    updateEmail: (input: UpdateEmailInput) =>
+      patchJson<AuthResponse>("/api/account/email", input),
+    updatePassword: (input: UpdatePasswordInput) =>
+      patchJson<{ success: true }>("/api/account/password", input),
+    deleteAccount: (input: DeleteAccountInput) =>
+      requestJson<{ success: true }>("/api/account", {
+        method: "DELETE",
+        body: JSON.stringify(input),
+      }),
   },
   schoolLevels: () => requestJson<SchoolLevelsResponse>("/api/school-levels"),
 };
