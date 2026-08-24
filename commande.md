@@ -1,3 +1,18 @@
+
+  Vérifie d’abord l’authentification Cloudflare si nécessaire :
+
+  npx wrangler whoami
+
+  Si tu n’es pas connecté :
+
+  npx wrangler login
+
+  Puis applique les migrations distantes :
+
+  npm run db:migrate:remote
+
+
+
   npm install
   npm test
 
