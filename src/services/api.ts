@@ -19,11 +19,17 @@ import type {
   DailyChallengeAnswerResponse,
   DailyChallengeResponse,
   DashboardData,
+  LeagueHistoryResponse,
+  LeagueLeaderboardResponse,
+  LeagueMe,
   LoginInput,
+  ProfileResponse,
+  ProgressionResponse,
   RegisterInput,
   SchoolLevelsResponse,
   SubjectSummary,
   UpdateAdminUserInput,
+  UpdatePasswordInput,
   UpdateProfileInput,
   UserRole,
 } from "@/types/domain";
@@ -146,6 +152,8 @@ export const api = {
       ),
   },
   dashboard: () => requestJson<DashboardData>("/api/dashboard"),
+  profile: () => requestJson<ProfileResponse>("/api/profile"),
+  progression: () => requestJson<ProgressionResponse>("/api/progression"),
   dailyChallenge: {
     current: () => requestJson<DailyChallengeResponse>("/api/daily-challenge"),
     start: () => postJson<DailyChallengeResponse>("/api/daily-challenge/start"),
@@ -163,6 +171,13 @@ export const api = {
     logout: () => postJson<{ success: true }>("/api/auth/logout"),
     updateProfile: (input: UpdateProfileInput) =>
       patchJson<AuthResponse>("/api/auth/me", input),
+    updatePassword: (input: UpdatePasswordInput) =>
+      patchJson<{ success: true }>("/api/account/password", input),
   },
   schoolLevels: () => requestJson<SchoolLevelsResponse>("/api/school-levels"),
+  league: {
+    me: () => requestJson<LeagueMe>("/api/league/me"),
+    leaderboard: () => requestJson<LeagueLeaderboardResponse>("/api/league/leaderboard"),
+    history: () => requestJson<LeagueHistoryResponse>("/api/league/history"),
+  },
 };

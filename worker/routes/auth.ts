@@ -21,6 +21,7 @@ interface LoginUserRow {
   role: "student" | "admin";
   display_name: string;
   avatar_emoji: string;
+  profile_color: string;
   school_level_id: string;
   school_level_label: string;
   password_hash: string | null;
@@ -66,6 +67,49 @@ function validateDisplayName(displayName: string): void {
   }
 }
 
+const PROFILE_COLOR_OPTIONS = new Set([
+  "#6C5CE7",
+  "#315F9E",
+  "#D95652",
+  "#F59E0B",
+  "#10B981",
+  "#F06292",
+]);
+
+function normalizedDisplayName(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new HttpError(400, "Le prénom est invalide.");
+  }
+  const displayName = value.trim().replace(/\s+/g, " ");
+  validateDisplayName(displayName);
+  return displayName;
+}
+
+function validatedAvatar(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new HttpError(400, "L’avatar sélectionné est invalide.");
+  }
+
+  const avatar = value.trim();
+  const graphemes = Array.from(
+    new Intl.Segmenter("fr", { granularity: "grapheme" }).segment(avatar),
+    ({ segment }) => segment,
+  );
+  const isEmoji = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3)/u;
+
+  if (graphemes.length !== 1 || !isEmoji.test(avatar)) {
+    throw new HttpError(400, "L’avatar sélectionné est invalide.");
+  }
+  return avatar;
+}
+
+function validatedProfileColor(value: unknown): string {
+  if (typeof value !== "string" || !PROFILE_COLOR_OPTIONS.has(value)) {
+    throw new HttpError(400, "La couleur sélectionnée est invalide.");
+  }
+  return value;
+}
+
 function toAuthUser(row: LoginUserRow): AuthUser {
   return {
     id: row.id,
@@ -73,6 +117,7 @@ function toAuthUser(row: LoginUserRow): AuthUser {
     role: row.role,
     displayName: row.display_name,
     avatarEmoji: row.avatar_emoji,
+    profileColor: row.profile_color,
     schoolLevel: {
       id: row.school_level_id,
       label: row.school_level_label,
@@ -150,6 +195,7 @@ export async function register(request: Request, env: Env): Promise<Response> {
     role: "student",
     displayName,
     avatarEmoji: "🧑‍🎓",
+    profileColor: "#6C5CE7",
     schoolLevel,
   };
 
@@ -174,6 +220,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
       u.role,
       u.display_name,
       u.avatar_emoji,
+      u.profile_color,
       u.school_level_id,
       l.label AS school_level_label,
       u.password_hash,
@@ -229,7 +276,25 @@ export async function updateProfile(
   user: AuthUser,
 ): Promise<Response> {
   const body = await readJsonObject(request);
-  const schoolLevelId = requiredString(body, "schoolLevelId").trim();
+  const editableFields = ["displayName", "avatarEmoji", "profileColor", "schoolLevelId"];
+  if (!editableFields.some((field) => field in body)) {
+    throw new HttpError(400, "Aucune modification n’a été fournie.");
+  }
+
+  const displayName = "displayName" in body
+    ? normalizedDisplayName(body.displayName)
+    : user.displayName;
+  const avatarEmoji = "avatarEmoji" in body
+    ? validatedAvatar(body.avatarEmoji)
+    : user.avatarEmoji;
+  const profileColor = "profileColor" in body
+    ? validatedProfileColor(body.profileColor)
+    : user.profileColor;
+  const schoolLevelId = "schoolLevelId" in body
+    ? typeof body.schoolLevelId === "string"
+      ? body.schoolLevelId.trim()
+      : ""
+    : user.schoolLevel.id;
 
   const schoolLevel = await env.DB.prepare(
     "SELECT id, label FROM school_levels WHERE id = ?1",
@@ -241,12 +306,130 @@ export async function updateProfile(
   }
 
   await env.DB.prepare(
-    "UPDATE users SET school_level_id = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+    `UPDATE users
+     SET display_name = ?1,
+         avatar_emoji = ?2,
+         profile_color = ?3,
+         school_level_id = ?4,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?5`,
   )
-    .bind(schoolLevel.id, user.id)
+    .bind(displayName, avatarEmoji, profileColor, schoolLevel.id, user.id)
     .run();
 
-  return json(request, { user: { ...user, schoolLevel } });
+  return json(request, {
+    user: { ...user, displayName, avatarEmoji, profileColor, schoolLevel },
+  });
+}
+
+interface PasswordRow {
+  password_hash: string | null;
+  password_iterations: number | null;
+  password_salt: string | null;
+}
+
+async function verifyCurrentPassword(
+  env: Env,
+  userId: string,
+  password: string,
+): Promise<void> {
+  const row = await env.DB.prepare(
+    `SELECT password_hash, password_salt, password_iterations
+     FROM users
+     WHERE id = ?1`,
+  )
+    .bind(userId)
+    .first<PasswordRow>();
+  const digest = row?.password_hash && row.password_salt && row.password_iterations
+    ? {
+        hash: row.password_hash,
+        salt: row.password_salt,
+        iterations: row.password_iterations,
+      }
+    : FAKE_PASSWORD_DIGEST;
+
+  if (!row || !(await verifyPassword(password, digest))) {
+    throw new HttpError(401, "Le mot de passe actuel est incorrect.");
+  }
+}
+
+export async function updateEmail(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+): Promise<Response> {
+  const body = await readJsonObject(request);
+  const email = normalizeEmail(requiredString(body, "email"));
+  const currentPassword = requiredString(body, "currentPassword");
+  validateEmail(email);
+  validatePassword(currentPassword);
+  await verifyCurrentPassword(env, user.id, currentPassword);
+
+  try {
+    await env.DB.prepare(
+      "UPDATE users SET email = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+    )
+      .bind(email, user.id)
+      .run();
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new HttpError(409, "Un compte existe déjà avec cette adresse e-mail.");
+    }
+    throw error;
+  }
+
+  return json(request, { user: { ...user, email } });
+}
+
+export async function updatePassword(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+): Promise<Response> {
+  const body = await readJsonObject(request);
+  const currentPassword = requiredString(body, "currentPassword");
+  const newPassword = requiredString(body, "newPassword");
+  validatePassword(currentPassword);
+  validatePassword(newPassword);
+  if (currentPassword === newPassword) {
+    throw new HttpError(400, "Choisis un nouveau mot de passe différent de l’ancien.");
+  }
+  await verifyCurrentPassword(env, user.id, currentPassword);
+
+  const digest = await hashPassword(newPassword);
+  const session = await createSession(request, user.id);
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE users
+       SET password_hash = ?1,
+           password_salt = ?2,
+           password_iterations = ?3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?4`,
+    ).bind(digest.hash, digest.salt, digest.iterations, user.id),
+    env.DB.prepare("DELETE FROM auth_sessions WHERE user_id = ?1").bind(user.id),
+    sessionInsertStatement(env, session),
+  ]);
+
+  return json(request, { success: true }, {
+    headers: { "Set-Cookie": session.cookie },
+  });
+}
+
+export async function deleteAccount(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+): Promise<Response> {
+  const body = await readJsonObject(request);
+  const currentPassword = requiredString(body, "currentPassword");
+  validatePassword(currentPassword);
+  await verifyCurrentPassword(env, user.id, currentPassword);
+  await env.DB.prepare("DELETE FROM users WHERE id = ?1").bind(user.id).run();
+
+  return json(request, { success: true }, {
+    headers: { "Set-Cookie": expiredSessionCookie(request) },
+  });
 }
 
 export async function logout(request: Request, env: Env): Promise<Response> {

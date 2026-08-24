@@ -1,7 +1,13 @@
 import { computed, readonly, ref } from "vue";
 
 import { api, ApiError } from "@/services/api";
-import type { AuthUser, LoginInput, RegisterInput, UpdateProfileInput } from "@/types/domain";
+import type {
+  AuthUser,
+  LoginInput,
+  RegisterInput,
+  UpdatePasswordInput,
+  UpdateProfileInput,
+} from "@/types/domain";
 
 const currentUser = ref<AuthUser | null>(null);
 const isInitializing = ref(false);
@@ -39,6 +45,10 @@ async function updateProfile(input: UpdateProfileInput): Promise<void> {
   currentUser.value = (await api.auth.updateProfile(input)).user;
 }
 
+async function updatePassword(input: UpdatePasswordInput): Promise<void> {
+  await api.auth.updatePassword(input);
+}
+
 async function logout(): Promise<void> {
   await api.auth.logout();
   currentUser.value = null;
@@ -56,6 +66,7 @@ export const auth = {
   login,
   logout,
   register,
+  updatePassword,
   updateProfile,
   user: readonly(currentUser),
 };

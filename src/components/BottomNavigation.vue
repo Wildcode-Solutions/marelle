@@ -5,7 +5,7 @@ import { auth } from "@/services/auth";
 
 const items = computed(() => [
   { to: "/", label: "Accueil", icon: "⌂" },
-  { to: "/matieres", label: "Matières", icon: "▦" },
+  { to: "/ligue", label: "Ligue", icon: "🏆" },
   { to: "/progression", label: "Progrès", icon: "↗" },
   { to: "/profil", label: "Profil", icon: "☺" },
   ...(auth.user.value?.role === "admin"

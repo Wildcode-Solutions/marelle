@@ -23,7 +23,17 @@ import {
   updateAdminSubject,
 } from "./routes/admin-subjects";
 import { adminOverview } from "./routes/admin";
-import { login, logout, me, register, schoolLevels, updateProfile } from "./routes/auth";
+import {
+  deleteAccount,
+  login,
+  logout,
+  me,
+  register,
+  schoolLevels,
+  updateEmail,
+  updatePassword,
+  updateProfile,
+} from "./routes/auth";
 import { dashboard } from "./routes/dashboard";
 import {
   answerDailyChallenge,
@@ -32,6 +42,18 @@ import {
   startDailyChallenge,
 } from "./routes/daily-challenge";
 import { subjects } from "./routes/subjects";
+import { profileSummary } from "./routes/profile";
+import { progression } from "./routes/progression";
+import {
+  leagueMe,
+  leagueLeaderboard,
+  leagueHistory,
+} from "./routes/league";
+import {
+  adminLeagues,
+  adminProcessLeagues,
+} from "./routes/admin-leagues";
+import { currentLeagueWeek, processLeagueWeek } from "./lib/league";
 
 function methodNotAllowed(request: Request, methods: string[]): Response {
   return json(request, { error: "Method not allowed" }, {
@@ -124,6 +146,36 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         return updateProfile(request, env, user);
       }
       return methodNotAllowed(request, ["GET", "PATCH"]);
+    }
+
+    case "/api/account/email": {
+      if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+      const user = await requireSessionUser(request, env);
+      return updateEmail(request, env, user);
+    }
+
+    case "/api/account/password": {
+      if (request.method !== "PATCH") return methodNotAllowed(request, ["PATCH"]);
+      const user = await requireSessionUser(request, env);
+      return updatePassword(request, env, user);
+    }
+
+    case "/api/account": {
+      if (request.method !== "DELETE") return methodNotAllowed(request, ["DELETE"]);
+      const user = await requireSessionUser(request, env);
+      return deleteAccount(request, env, user);
+    }
+
+    case "/api/profile": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return profileSummary(request, env, user.id);
+    }
+
+    case "/api/progression": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return progression(request, env, user.id);
     }
 
     case "/api/school-levels":
@@ -222,6 +274,36 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         ? subjects(request, env)
         : methodNotAllowed(request, ["GET"]);
 
+    case "/api/league/me": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return leagueMe(request, env, user.id);
+    }
+
+    case "/api/league/leaderboard": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return leagueLeaderboard(request, env, user.id);
+    }
+
+    case "/api/league/history": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return leagueHistory(request, env, user.id);
+    }
+
+    case "/api/admin/leagues": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireAdminUser(request, env);
+      return adminLeagues(request, env);
+    }
+
+    case "/api/admin/leagues/process": {
+      if (request.method !== "POST") return methodNotAllowed(request, ["POST"]);
+      await requireAdminUser(request, env);
+      return adminProcessLeagues(request, env);
+    }
+
     default:
       return json(request, { error: "Not found" }, { status: 404 });
   }
@@ -255,5 +337,21 @@ export default {
         env.ALLOWED_ORIGINS,
       );
     }
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    // Traitement de la semaine qui vient de se terminer (dimanche 23h30 Paris)
+    const previousWeekDate = new Date();
+    previousWeekDate.setDate(previousWeekDate.getDate() - 1); // hier = dimanche
+    const previousWeek = currentLeagueWeek(previousWeekDate);
+    const result = await processLeagueWeek(env, previousWeek.id);
+    console.info(
+      JSON.stringify({
+        message: "League week cron completed",
+        weekId: previousWeek.id,
+        processed: result.processed,
+        alreadyDone: result.alreadyDone,
+      }),
+    );
   },
 } satisfies ExportedHandler<Env>;

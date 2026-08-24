@@ -39,7 +39,7 @@ const progressPercentage = computed(() => {
       </div>
     </div>
 
-    <RouterLink class="primary-button" to="/matieres">
+    <RouterLink class="primary-button" to="/marelle-du-jour">
       Continuer ma session
       <span aria-hidden="true">→</span>
     </RouterLink>

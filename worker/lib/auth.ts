@@ -11,6 +11,7 @@ export interface AuthUser {
   role: "student" | "admin";
   displayName: string;
   avatarEmoji: string;
+  profileColor: string;
   schoolLevel: {
     id: string;
     label: string;
@@ -23,6 +24,7 @@ interface SessionUserRow {
   role: "student" | "admin";
   display_name: string;
   avatar_emoji: string;
+  profile_color: string;
   school_level_id: string;
   school_level_label: string;
 }
@@ -57,6 +59,7 @@ function toAuthUser(row: SessionUserRow): AuthUser {
     role: row.role,
     displayName: row.display_name,
     avatarEmoji: row.avatar_emoji,
+    profileColor: row.profile_color,
     schoolLevel: {
       id: row.school_level_id,
       label: row.school_level_label,
@@ -137,6 +140,7 @@ export async function getSessionUser(request: Request, env: Env): Promise<AuthUs
       u.role,
       u.display_name,
       u.avatar_emoji,
+      u.profile_color,
       u.school_level_id,
       l.label AS school_level_label
      FROM auth_sessions s

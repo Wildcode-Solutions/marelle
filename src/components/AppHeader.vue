@@ -21,11 +21,12 @@ defineProps<{
         <span aria-hidden="true">🔥</span>
         <strong>{{ user.currentStreak }}</strong>
       </span>
-      <span class="stat-pill" :title="`${user.lives} vies restantes`">
-        <span aria-hidden="true">💜</span>
-        <strong>{{ user.lives }}</strong>
-      </span>
-      <span class="avatar" :title="user.displayName" aria-hidden="true">{{ user.avatarEmoji }}</span>
+      <span
+        class="avatar"
+        :style="{ '--avatar-color': user.profileColor }"
+        :title="user.displayName"
+        aria-hidden="true"
+      >{{ user.avatarEmoji }}</span>
     </div>
   </header>
 </template>

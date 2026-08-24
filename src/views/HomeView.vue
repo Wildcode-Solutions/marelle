@@ -3,8 +3,7 @@ import { computed, onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
 import DailyChallengeCard from "@/components/DailyChallengeCard.vue";
-import DailyGoalCard from "@/components/DailyGoalCard.vue";
-import SubjectGrid from "@/components/SubjectGrid.vue";
+import LeagueCard from "@/components/LeagueCard.vue";
 import { api } from "@/services/api";
 import type { DailyChallenge, DashboardData } from "@/types/domain";
 
@@ -74,7 +73,7 @@ onMounted(loadDashboard);
       :current-streak="dashboard.user.currentStreak"
     />
 
-    <DailyGoalCard :progress="dashboard.today" />
+    <LeagueCard />
 
     <section class="quick-stats" aria-label="Statistiques du jour">
       <div>
@@ -92,17 +91,6 @@ onMounted(loadDashboard);
         <strong>{{ dashboard.user.xp }}</strong>
         <small>XP total</small>
       </div>
-    </section>
-
-    <section class="section-block" aria-labelledby="subjects-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Choisis ton intercalaire</p>
-          <h2 id="subjects-title">Au programme</h2>
-        </div>
-        <RouterLink to="/matieres">Tout voir</RouterLink>
-      </div>
-      <SubjectGrid :subjects="dashboard.subjects.slice(0, 4)" />
     </section>
 
     <aside class="streak-card">

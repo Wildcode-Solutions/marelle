@@ -13,12 +13,6 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: "/matieres",
-      name: "subjects",
-      component: () => import("@/views/SubjectsView.vue"),
-      meta: { requiresAuth: true },
-    },
-    {
       path: "/marelle-du-jour",
       name: "daily-challenge",
       component: () => import("@/views/DailyChallengeView.vue"),
@@ -53,6 +47,12 @@ const router = createRouter({
       name: "register",
       component: () => import("@/views/AuthView.vue"),
       meta: { guestOnly: true },
+    },
+    {
+      path: "/ligue",
+      name: "league",
+      component: () => import("@/views/LeagueView.vue"),
+      meta: { requiresAuth: true },
     },
   ],
   scrollBehavior: () => ({ top: 0 }),
