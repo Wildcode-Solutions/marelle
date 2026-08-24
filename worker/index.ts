@@ -44,6 +44,16 @@ import {
 import { subjects } from "./routes/subjects";
 import { profileSummary } from "./routes/profile";
 import { progression } from "./routes/progression";
+import {
+  leagueMe,
+  leagueLeaderboard,
+  leagueHistory,
+} from "./routes/league";
+import {
+  adminLeagues,
+  adminProcessLeagues,
+} from "./routes/admin-leagues";
+import { currentLeagueWeek, processLeagueWeek } from "./lib/league";
 
 function methodNotAllowed(request: Request, methods: string[]): Response {
   return json(request, { error: "Method not allowed" }, {
@@ -264,6 +274,36 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         ? subjects(request, env)
         : methodNotAllowed(request, ["GET"]);
 
+    case "/api/league/me": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return leagueMe(request, env, user.id);
+    }
+
+    case "/api/league/leaderboard": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return leagueLeaderboard(request, env, user.id);
+    }
+
+    case "/api/league/history": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      const user = await requireSessionUser(request, env);
+      return leagueHistory(request, env, user.id);
+    }
+
+    case "/api/admin/leagues": {
+      if (request.method !== "GET") return methodNotAllowed(request, ["GET"]);
+      await requireAdminUser(request, env);
+      return adminLeagues(request, env);
+    }
+
+    case "/api/admin/leagues/process": {
+      if (request.method !== "POST") return methodNotAllowed(request, ["POST"]);
+      await requireAdminUser(request, env);
+      return adminProcessLeagues(request, env);
+    }
+
     default:
       return json(request, { error: "Not found" }, { status: 404 });
   }
@@ -297,5 +337,21 @@ export default {
         env.ALLOWED_ORIGINS,
       );
     }
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    // Traitement de la semaine qui vient de se terminer (dimanche 23h30 Paris)
+    const previousWeekDate = new Date();
+    previousWeekDate.setDate(previousWeekDate.getDate() - 1); // hier = dimanche
+    const previousWeek = currentLeagueWeek(previousWeekDate);
+    const result = await processLeagueWeek(env, previousWeek.id);
+    console.info(
+      JSON.stringify({
+        message: "League week cron completed",
+        weekId: previousWeek.id,
+        processed: result.processed,
+        alreadyDone: result.alreadyDone,
+      }),
+    );
   },
 } satisfies ExportedHandler<Env>;

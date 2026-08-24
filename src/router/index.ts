@@ -48,6 +48,12 @@ const router = createRouter({
       component: () => import("@/views/AuthView.vue"),
       meta: { guestOnly: true },
     },
+    {
+      path: "/ligue",
+      name: "league",
+      component: () => import("@/views/LeagueView.vue"),
+      meta: { requiresAuth: true },
+    },
   ],
   scrollBehavior: () => ({ top: 0 }),
 });

@@ -425,3 +425,103 @@ export interface DashboardData {
   today: TodayProgress;
   subjects: SubjectSummary[];
 }
+
+// ================================================================
+// Système de ligues
+// ================================================================
+
+export type LeagueKey =
+  | "iron"
+  | "bronze"
+  | "silver"
+  | "gold"
+  | "platinum"
+  | "emerald"
+  | "ruby"
+  | "diamond";
+
+export type LeagueZone = "promotion" | "stay" | "relegation";
+
+export interface LeagueSummary {
+  leagueKey: LeagueKey;
+  leagueName: string;
+  leagueIcon: string;
+  leagueColor: string;
+  weekId: string;
+  weekStart: string;
+  weekEnd: string;
+  weeklyXp: number;
+  rank: number | null;
+  totalMembers: number;
+  zone: LeagueZone | null;
+  promotionCount: number;
+  relegationCount: number;
+  xpToPromotionZone: number | null;
+  isActive: boolean;
+}
+
+export interface LeagueMe {
+  league: LeagueSummary;
+}
+
+export interface LeaderboardUser {
+  rank: number;
+  userId: string;
+  displayName: string;
+  avatarEmoji: string;
+  profileColor: string;
+  weeklyXp: number;
+  zone: LeagueZone;
+  isCurrentUser: boolean;
+}
+
+export interface LeagueLeaderboard {
+  leagueKey: LeagueKey;
+  leagueName: string;
+  leagueIcon: string;
+  leagueColor: string;
+  groupId: string;
+  weekId: string;
+  weekStart: string;
+  weekEnd: string;
+  currentUserRank: number | null;
+  currentUserXp: number;
+  totalMembers: number;
+  promotionCount: number;
+  relegationCount: number;
+  xpToPromotionZone: number | null;
+  users: LeaderboardUser[];
+}
+
+export interface LeagueLeaderboardResponse {
+  leaderboard: LeagueLeaderboard | null;
+}
+
+export interface LeagueHistoryEntry {
+  weekId: string;
+  weekStart: string;
+  leagueKey: LeagueKey;
+  leagueName: string;
+  leagueIcon: string;
+  finalRank: number;
+  weeklyXp: number;
+  result: "promoted" | "stayed" | "relegated";
+  recordedAt: string;
+}
+
+export interface LeagueHistoryResponse {
+  history: LeagueHistoryEntry[];
+}
+
+export interface LeagueXpBreakdown {
+  reason: string;
+  awarded: number;
+}
+
+export interface DailyChallengeFinishLeague {
+  league: LeagueSummary;
+  leagueXp: {
+    totalAwarded: number;
+    breakdown: LeagueXpBreakdown[];
+  };
+}

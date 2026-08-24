@@ -20,6 +20,9 @@ import type {
   DailyChallengeResponse,
   DashboardData,
   DeleteAccountInput,
+  LeagueHistoryResponse,
+  LeagueLeaderboardResponse,
+  LeagueMe,
   LoginInput,
   ProfileResponse,
   ProgressionResponse,
@@ -181,4 +184,9 @@ export const api = {
       }),
   },
   schoolLevels: () => requestJson<SchoolLevelsResponse>("/api/school-levels"),
+  league: {
+    me: () => requestJson<LeagueMe>("/api/league/me"),
+    leaderboard: () => requestJson<LeagueLeaderboardResponse>("/api/league/leaderboard"),
+    history: () => requestJson<LeagueHistoryResponse>("/api/league/history"),
+  },
 };

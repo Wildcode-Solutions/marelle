@@ -6,6 +6,7 @@ import {
   type AnswerSubmission,
   type QuestionKind,
 } from "../lib/questions";
+import { awardLeagueXp, getLeagueMe } from "../lib/league";
 
 interface ChallengeRow {
   id: string;
@@ -514,7 +515,8 @@ export async function finishDailyChallenge(
   const attempt = await attemptForUser(env, attemptId, userId);
 
   if (attempt.completed_at) {
-    return json(request, { challenge: await challengePayload(env, userId) });
+    const league = await getLeagueMe(env, userId);
+    return json(request, { challenge: await challengePayload(env, userId), league });
   }
   assertAttemptPlayable(attempt);
 
@@ -637,5 +639,72 @@ export async function finishDailyChallenge(
     ).bind(attempt.id, userId, stats.correct),
   ]);
 
-  return json(request, { challenge: await challengePayload(env, userId) });
+  // ── Attribution XP de ligue (après le batch principal, idempotente via source_id) ──
+  const now = new Date();
+  const leagueXpBreakdown: Array<{ reason: string; awarded: number }> = [];
+  let totalLeagueXpAwarded = 0;
+
+  // +50 XP participation Marelle du jour
+  const completion = await awardLeagueXp(
+    env, userId, 50, "DAILY_CHALLENGE_COMPLETION",
+    "daily_challenge_attempt", attempt.id, now,
+  );
+  if (completion && completion.awarded > 0) {
+    leagueXpBreakdown.push({ reason: "DAILY_CHALLENGE_COMPLETION", awarded: completion.awarded });
+    totalLeagueXpAwarded += completion.awarded;
+  }
+
+  // +10 XP par bonne réponse
+  if (stats.correct > 0) {
+    const correctXp = await awardLeagueXp(
+      env, userId, stats.correct * 10, "CORRECT_ANSWER",
+      "daily_challenge_attempt", `${attempt.id}:correct`, now,
+    );
+    if (correctXp && correctXp.awarded > 0) {
+      leagueXpBreakdown.push({ reason: "CORRECT_ANSWER", awarded: correctXp.awarded });
+      totalLeagueXpAwarded += correctXp.awarded;
+    }
+  }
+
+  // +25 XP si score parfait
+  if (stats.correct === attempt.total_questions) {
+    const perfect = await awardLeagueXp(
+      env, userId, 25, "PERFECT_DAILY_CHALLENGE",
+      "daily_challenge_attempt", `${attempt.id}:perfect`, now,
+    );
+    if (perfect && perfect.awarded > 0) {
+      leagueXpBreakdown.push({ reason: "PERFECT_DAILY_CHALLENGE", awarded: perfect.awarded });
+      totalLeagueXpAwarded += perfect.awarded;
+    }
+  }
+
+  // +20 XP bonus première activité du jour (via daily_progress créé = exactement 1 session aujourd'hui)
+  const dailyRow = await env.DB.prepare(
+    `SELECT completed_sessions FROM daily_progress
+     WHERE user_id = ?1 AND activity_date = ?2`,
+  )
+    .bind(userId, activityDate)
+    .first<{ completed_sessions: number }>();
+
+  if (dailyRow && dailyRow.completed_sessions === 1) {
+    const firstActivity = await awardLeagueXp(
+      env, userId, 20, "DAILY_FIRST_ACTIVITY",
+      "daily_challenge_attempt", `${attempt.id}:first-activity`, now,
+    );
+    if (firstActivity && firstActivity.awarded > 0) {
+      leagueXpBreakdown.push({ reason: "DAILY_FIRST_ACTIVITY", awarded: firstActivity.awarded });
+      totalLeagueXpAwarded += firstActivity.awarded;
+    }
+  }
+
+  const league = await getLeagueMe(env, userId, now);
+
+  return json(request, {
+    challenge: await challengePayload(env, userId),
+    league,
+    leagueXp: {
+      totalAwarded: totalLeagueXpAwarded,
+      breakdown: leagueXpBreakdown,
+    },
+  });
 }

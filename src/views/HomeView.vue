@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
 import DailyChallengeCard from "@/components/DailyChallengeCard.vue";
+import LeagueCard from "@/components/LeagueCard.vue";
 import { api } from "@/services/api";
 import type { DailyChallenge, DashboardData } from "@/types/domain";
 
@@ -71,6 +72,8 @@ onMounted(loadDashboard);
       :challenge="dailyChallenge"
       :current-streak="dashboard.user.currentStreak"
     />
+
+    <LeagueCard />
 
     <section class="quick-stats" aria-label="Statistiques du jour">
       <div>
