@@ -13,6 +13,8 @@ interface AdminUserRow {
   school_level_label: string;
   xp: number;
   created_at: string;
+  last_login_at: number | null;
+  login_count: number;
 }
 
 function toAdminUser(row: AdminUserRow) {
@@ -28,6 +30,10 @@ function toAdminUser(row: AdminUserRow) {
     },
     xp: row.xp,
     createdAt: row.created_at,
+    loginCount: row.login_count,
+    lastLoginAt: row.last_login_at === null
+      ? null
+      : new Date(row.last_login_at * 1_000).toISOString(),
   };
 }
 
@@ -71,9 +77,16 @@ async function findUser(env: Env, userId: string): Promise<AdminUserRow | null> 
       u.school_level_id,
       l.label AS school_level_label,
       u.xp,
-      u.created_at
+      u.created_at,
+      COALESCE(login_activity.login_count, 0) AS login_count,
+      login_activity.last_login_at
      FROM users u
      JOIN school_levels l ON l.id = u.school_level_id
+     LEFT JOIN (
+       SELECT user_id, COUNT(*) AS login_count, MAX(occurred_at) AS last_login_at
+       FROM user_login_events
+       GROUP BY user_id
+     ) login_activity ON login_activity.user_id = u.id
      WHERE u.id = ?1`,
   )
     .bind(userId)
@@ -100,9 +113,16 @@ export async function adminUsers(request: Request, env: Env): Promise<Response> 
       u.school_level_id,
       l.label AS school_level_label,
       u.xp,
-      u.created_at
+      u.created_at,
+      COALESCE(login_activity.login_count, 0) AS login_count,
+      login_activity.last_login_at
      FROM users u
      JOIN school_levels l ON l.id = u.school_level_id
+     LEFT JOIN (
+       SELECT user_id, COUNT(*) AS login_count, MAX(occurred_at) AS last_login_at
+       FROM user_login_events
+       GROUP BY user_id
+     ) login_activity ON login_activity.user_id = u.id
      WHERE (?1 IS NULL OR u.role = ?1)
      ORDER BY u.display_name COLLATE NOCASE, u.email COLLATE NOCASE
      LIMIT ?2 OFFSET ?3`,

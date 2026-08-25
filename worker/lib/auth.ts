@@ -123,6 +123,17 @@ export function sessionInsertStatement(
   ).bind(session.id, session.userId, session.tokenHash, session.expiresAt);
 }
 
+export function loginEventInsertStatement(
+  env: Env,
+  session: PendingSession,
+  eventType: "registration" | "login",
+): D1PreparedStatement {
+  return env.DB.prepare(
+    `INSERT INTO user_login_events (id, user_id, event_type)
+     VALUES (?1, ?2, ?3)`,
+  ).bind(session.id, session.userId, eventType);
+}
+
 export function getSessionToken(request: Request): string | null {
   const token = parseCookie(request, SESSION_COOKIE);
   return token && /^[0-9a-f]{64}$/i.test(token) ? token : null;

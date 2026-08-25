@@ -1,7 +1,7 @@
 import { json, readJsonObject } from "../lib/http";
 import { HttpError } from "../lib/http";
 import {
-  getAdminLeagueOverview,
+  getAdminLeagueStats,
   processLeagueWeek,
   currentLeagueWeek,
 } from "../lib/league";
@@ -10,8 +10,7 @@ export async function adminLeagues(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const overview = await getAdminLeagueOverview(env);
-  return json(request, { weeks: overview });
+  return json(request, await getAdminLeagueStats(env));
 }
 
 export async function adminProcessLeagues(

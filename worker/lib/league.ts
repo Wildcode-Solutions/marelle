@@ -982,8 +982,63 @@ export interface AdminLeagueOverview {
     leagueName: string;
     groupNumber: number;
     memberCount: number;
+    weeklyXp: number;
   }>;
   totalActivePlayers: number;
+  totalGroups: number;
+  totalWeeklyXp: number;
+}
+
+export interface AdminLeagueStats {
+  currentWeek: LeagueWeek;
+  totals: {
+    players: number;
+    activePlayers: number;
+    groups: number;
+    weeklyXp: number;
+    averageXpPerActivePlayer: number;
+  };
+  leagues: Array<LeagueConfig & {
+    players: number;
+    activePlayers: number;
+    groups: number;
+    weeklyXp: number;
+  }>;
+  outcomes: {
+    promoted: number;
+    stayed: number;
+    relegated: number;
+    total: number;
+  };
+  weeks: AdminLeagueOverview[];
+}
+
+interface AdminLeagueDistributionRow {
+  league_key: LeagueKey;
+  player_count: number;
+}
+
+interface AdminLeagueActivityRow {
+  active_players: number;
+  group_count: number;
+  league_key: LeagueKey;
+  weekly_xp: number;
+}
+
+interface AdminLeagueOutcomeRow {
+  promoted: number;
+  relegated: number;
+  stayed: number;
+  total: number;
+}
+
+interface AdminLeagueGroupOverviewRow {
+  group_id: string;
+  group_number: number;
+  league_key: LeagueKey;
+  league_week_id: string;
+  member_count: number;
+  weekly_xp: number;
 }
 
 export async function getAdminLeagueOverview(
@@ -996,32 +1051,29 @@ export async function getAdminLeagueOverview(
      LIMIT 10`,
   ).all<{ id: string; week_start: string; week_end: string; processed_at: string | null }>();
 
-  const overviews: AdminLeagueOverview[] = [];
+  const { results: allGroups } = await env.DB.prepare(
+    `SELECT
+       lg.id AS group_id,
+       lg.league_week_id,
+       lg.league_key,
+       lg.group_number,
+       COUNT(lgm.id) AS member_count,
+       COALESCE(SUM(lgm.weekly_xp), 0) AS weekly_xp
+     FROM league_groups lg
+     LEFT JOIN league_group_members lgm ON lgm.league_group_id = lg.id
+     WHERE lg.league_week_id IN (
+       SELECT id FROM league_weeks ORDER BY week_start DESC LIMIT 10
+     )
+     GROUP BY lg.id
+     ORDER BY lg.league_week_id DESC, lg.league_key, lg.group_number`,
+  ).all<AdminLeagueGroupOverviewRow>();
 
-  for (const week of weeks) {
-    const { results: groups } = await env.DB.prepare(
-      `SELECT
-         lg.id AS group_id,
-         lg.league_key,
-         lg.group_number,
-         COUNT(lgm.id) AS member_count
-       FROM league_groups lg
-       LEFT JOIN league_group_members lgm ON lgm.league_group_id = lg.id
-       WHERE lg.league_week_id = ?1
-       GROUP BY lg.id
-       ORDER BY lg.league_key, lg.group_number`,
-    )
-      .bind(week.id)
-      .all<{
-        group_id: string;
-        league_key: LeagueKey;
-        group_number: number;
-        member_count: number;
-      }>();
-
+  return weeks.map((week) => {
+    const groups = allGroups.filter((group) => group.league_week_id === week.id);
     const totalActivePlayers = groups.reduce((sum, g) => sum + g.member_count, 0);
+    const totalWeeklyXp = groups.reduce((sum, group) => sum + group.weekly_xp, 0);
 
-    overviews.push({
+    return {
       weekId: week.id,
       weekStart: week.week_start,
       weekEnd: week.week_end,
@@ -1032,10 +1084,77 @@ export async function getAdminLeagueOverview(
         leagueName: LEAGUE_BY_KEY.get(g.league_key)?.name ?? g.league_key,
         groupNumber: g.group_number,
         memberCount: g.member_count,
+        weeklyXp: g.weekly_xp,
       })),
       totalActivePlayers,
-    });
-  }
+      totalGroups: groups.length,
+      totalWeeklyXp,
+    };
+  });
+}
 
-  return overviews;
+export async function getAdminLeagueStats(env: Env): Promise<AdminLeagueStats> {
+  const week = currentLeagueWeek();
+  const { results: distributionRows } = await env.DB.prepare(
+    `SELECT
+       COALESCE(ul.league_key, 'iron') AS league_key,
+       COUNT(*) AS player_count
+     FROM users u
+     LEFT JOIN user_leagues ul ON ul.user_id = u.id
+     GROUP BY COALESCE(ul.league_key, 'iron')`,
+  ).all<AdminLeagueDistributionRow>();
+
+  const { results: activityRows } = await env.DB.prepare(
+    `SELECT
+       lg.league_key,
+       COUNT(DISTINCT lg.id) AS group_count,
+       COUNT(lgm.id) AS active_players,
+       COALESCE(SUM(lgm.weekly_xp), 0) AS weekly_xp
+     FROM league_groups lg
+     LEFT JOIN league_group_members lgm ON lgm.league_group_id = lg.id
+     WHERE lg.league_week_id = ?1
+     GROUP BY lg.league_key`,
+  )
+    .bind(week.id)
+    .all<AdminLeagueActivityRow>();
+
+  const outcomeRow = await env.DB.prepare(
+    `SELECT
+       COUNT(*) AS total,
+       COALESCE(SUM(CASE WHEN result = 'promoted' THEN 1 ELSE 0 END), 0) AS promoted,
+       COALESCE(SUM(CASE WHEN result = 'stayed' THEN 1 ELSE 0 END), 0) AS stayed,
+       COALESCE(SUM(CASE WHEN result = 'relegated' THEN 1 ELSE 0 END), 0) AS relegated
+     FROM league_history`,
+  ).first<AdminLeagueOutcomeRow>();
+
+  const playerCounts = new Map(
+    distributionRows.map((row) => [row.league_key, row.player_count]),
+  );
+  const currentActivity = new Map(activityRows.map((row) => [row.league_key, row]));
+  const leagues = LEAGUES.map((league) => {
+    const activity = currentActivity.get(league.key);
+    return {
+      ...league,
+      players: playerCounts.get(league.key) ?? 0,
+      activePlayers: activity?.active_players ?? 0,
+      groups: activity?.group_count ?? 0,
+      weeklyXp: activity?.weekly_xp ?? 0,
+    };
+  });
+  const activePlayers = leagues.reduce((sum, league) => sum + league.activePlayers, 0);
+  const weeklyXp = leagues.reduce((sum, league) => sum + league.weeklyXp, 0);
+
+  return {
+    currentWeek: week,
+    totals: {
+      players: leagues.reduce((sum, league) => sum + league.players, 0),
+      activePlayers,
+      groups: leagues.reduce((sum, league) => sum + league.groups, 0),
+      weeklyXp,
+      averageXpPerActivePlayer: activePlayers === 0 ? 0 : Math.round(weeklyXp / activePlayers),
+    },
+    leagues,
+    outcomes: outcomeRow ?? { total: 0, promoted: 0, stayed: 0, relegated: 0 },
+    weeks: await getAdminLeagueOverview(env),
+  };
 }

@@ -1,6 +1,7 @@
 import {
   createSession,
   expiredSessionCookie,
+  loginEventInsertStatement,
   requireSessionUser,
   revokeSession,
   sessionInsertStatement,
@@ -181,6 +182,7 @@ export async function register(request: Request, env: Env): Promise<Response> {
         passwordDigest.iterations,
       ),
       sessionInsertStatement(env, session),
+      loginEventInsertStatement(env, session, "registration"),
     ]);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -251,6 +253,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()"),
     sessionInsertStatement(env, session),
+    loginEventInsertStatement(env, session, "login"),
   ]);
 
   return json(request, { user: toAuthUser(row) }, {
