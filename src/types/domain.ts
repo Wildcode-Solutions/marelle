@@ -110,6 +110,22 @@ export interface AdminOverview {
     admins: number;
   };
   activeSessions: number;
+  connections: {
+    total: number;
+    last24Hours: number;
+    last7Days: number;
+    activeUsersLast7Days: number;
+    lastAt: string | null;
+    recent: Array<{
+      id: string;
+      userId: string;
+      displayName: string;
+      email: string;
+      avatarEmoji: string;
+      kind: "registration" | "login";
+      occurredAt: string;
+    }>;
+  };
   activeSubjects: number;
   content: {
     questions: number;
@@ -132,6 +148,8 @@ export interface AdminUser {
   schoolLevel: SchoolLevel;
   xp: number;
   createdAt: string;
+  loginCount: number;
+  lastLoginAt: string | null;
 }
 
 export interface AdminUsersResponse {
@@ -502,6 +520,55 @@ export interface LeagueHistoryEntry {
 
 export interface LeagueHistoryResponse {
   history: LeagueHistoryEntry[];
+}
+
+export interface AdminLeagueStats {
+  currentWeek: {
+    id: string;
+    weekStart: string;
+    weekEnd: string;
+  };
+  totals: {
+    players: number;
+    activePlayers: number;
+    groups: number;
+    weeklyXp: number;
+    averageXpPerActivePlayer: number;
+  };
+  leagues: Array<{
+    key: LeagueKey;
+    name: string;
+    rankOrder: number;
+    icon: string;
+    color: string;
+    players: number;
+    activePlayers: number;
+    groups: number;
+    weeklyXp: number;
+  }>;
+  outcomes: {
+    promoted: number;
+    stayed: number;
+    relegated: number;
+    total: number;
+  };
+  weeks: Array<{
+    weekId: string;
+    weekStart: string;
+    weekEnd: string;
+    processedAt: string | null;
+    totalActivePlayers: number;
+    totalGroups: number;
+    totalWeeklyXp: number;
+    groups: Array<{
+      groupId: string;
+      leagueKey: LeagueKey;
+      leagueName: string;
+      groupNumber: number;
+      memberCount: number;
+      weeklyXp: number;
+    }>;
+  }>;
 }
 
 export interface LeagueXpBreakdown {

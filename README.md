@@ -61,8 +61,9 @@ npx wrangler login
 npm run db:migrate:remote
 ```
 
-La migration `0003_add_authentication.sql` ajoute les mots de passe et les sessions. Il faut
-l’appliquer sur la base distante avant de déployer la version avec authentification.
+La migration `0003_add_authentication.sql` ajoute les mots de passe et les sessions. La migration
+`0008_add_login_analytics.sql` ajoute l’historique des connexions utilisé par l’administration. Il
+faut appliquer les migrations sur la base distante avant de déployer la version correspondante.
 
 ## Espace administrateur
 
@@ -83,10 +84,12 @@ npx wrangler d1 execute marelle-db --remote \
   --command "UPDATE users SET role = 'admin' WHERE email = 'admin@example.com'"
 ```
 
-L’onglet **Comptes** permet ensuite de modifier les profils et de nommer d’autres administrateurs.
-L’onglet **Contenu** sert de studio pédagogique : création et édition des thèmes, QCM de 2 à 6
-réponses, exercices vrai/faux et réponses libres. Une question peut rester en brouillon, être
-publiée ou être archivée.
+L’onglet **Comptes** permet ensuite de modifier les profils, de nommer d’autres administrateurs et
+de consulter le nombre et la dernière connexion de chaque compte. La vue d’ensemble affiche les
+volumes de connexion et les événements récents. L’onglet **Ligues** regroupe la participation, les
+XP, les groupes, la répartition et les résultats historiques. L’onglet **Contenu** sert de studio
+pédagogique : création et édition des thèmes, QCM de 2 à 6 réponses, exercices vrai/faux et réponses
+libres. Une question peut rester en brouillon, être publiée ou être archivée.
 
 ## Déployer sur Cloudflare
 
@@ -136,6 +139,7 @@ rafraîchissement. Aucun proxy vers un port Node n’est nécessaire.
 | `GET` | `/api/auth/me` | Retourne l’utilisateur connecté |
 | `GET` | `/api/dashboard` | Retourne le tableau de bord authentifié |
 | `GET` | `/api/admin/overview` | Retourne les indicateurs réservés aux administrateurs |
+| `GET` | `/api/admin/leagues` | Retourne les statistiques générales des ligues |
 | `GET` | `/api/admin/users` | Liste paginée des comptes (`role=student`, `admin` ou `all`) |
 | `PATCH` | `/api/admin/users/:id` | Modifie un profil ou son rôle |
 | `GET` | `/api/admin/catalog` | Liste les matières et niveaux disponibles |

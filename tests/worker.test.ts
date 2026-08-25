@@ -161,8 +161,46 @@ describe("Marelle Worker API", () => {
       await expect(adminResponse.json()).resolves.toEqual({
         users: { total: 2, students: 1, admins: 1 },
         activeSessions: 1,
+        connections: {
+          total: 1,
+          last24Hours: 1,
+          last7Days: 1,
+          activeUsersLast7Days: 1,
+          lastAt: expect.any(String),
+          recent: [
+            {
+              id: expect.any(String),
+              userId: registerBody.user.id,
+              displayName: "Alex",
+              email: testEmail,
+              avatarEmoji: "🧑‍🎓",
+              kind: "registration",
+              occurredAt: expect.any(String),
+            },
+          ],
+        },
         activeSubjects: 6,
         content: { questions: 2, answers: 6 },
+      });
+
+      const leaguesResponse = await request("/api/admin/leagues", {
+        headers: { Cookie: registerCookie },
+      });
+      expect(leaguesResponse.status).toBe(200);
+      await expect(leaguesResponse.json()).resolves.toMatchObject({
+        totals: {
+          players: 2,
+          activePlayers: 0,
+          groups: 0,
+          weeklyXp: 0,
+          averageXpPerActivePlayer: 0,
+        },
+        leagues: expect.arrayContaining([
+          expect.objectContaining({ key: "iron", players: 2, activePlayers: 0 }),
+          expect.objectContaining({ key: "diamond", players: 0, activePlayers: 0 }),
+        ]),
+        outcomes: { promoted: 0, stayed: 0, relegated: 0, total: 0 },
+        weeks: [],
       });
 
       const usersResponse = await request("/api/admin/users?role=student", {
@@ -170,7 +208,13 @@ describe("Marelle Worker API", () => {
       });
       expect(usersResponse.status).toBe(200);
       await expect(usersResponse.json()).resolves.toMatchObject({
-        users: [{ id: "demo-user", displayName: "Camille", role: "student" }],
+        users: [{
+          id: "demo-user",
+          displayName: "Camille",
+          role: "student",
+          loginCount: 0,
+          lastLoginAt: null,
+        }],
         pagination: { limit: 50, offset: 0, hasMore: false },
       });
 
@@ -426,6 +470,31 @@ describe("Marelle Worker API", () => {
       headers: { Cookie: registerCookie },
     });
     expect(revokedResponse.status).toBe(401);
+
+    const loginResponse = await request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: testEmail, password: testPassword }),
+    });
+    expect(loginResponse.status).toBe(200);
+    const loginCookie = cookieFrom(loginResponse);
+    const loginEvents = await env.DB.prepare(
+      `SELECT event_type, COUNT(*) AS count
+       FROM user_login_events
+       WHERE user_id = ?1
+       GROUP BY event_type
+       ORDER BY event_type`,
+    )
+      .bind(registerBody.user.id)
+      .all<{ event_type: string; count: number }>();
+    expect(loginEvents.results).toEqual([
+      { event_type: "login", count: 1 },
+      { event_type: "registration", count: 1 },
+    ]);
+
+    await request("/api/auth/logout", {
+      method: "POST",
+      headers: { Cookie: loginCookie },
+    });
   });
 
   it("personalizes a profile and securely manages the account", async () => {
@@ -1241,6 +1310,28 @@ describe("Marelle Worker API", () => {
       expect(body.league.isActive).toBe(true);
       expect(body.league.weeklyXp).toBe(50);
       expect(body.league.rank).toBeGreaterThanOrEqual(1); // d'autres utilisateurs de tests peuvent être dans le groupe
+
+      await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?1")
+        .bind(userId)
+        .run();
+      const adminStatsResponse = await request("/api/admin/leagues", {
+        headers: { Cookie: cookie },
+      });
+      expect(adminStatsResponse.status).toBe(200);
+      await expect(adminStatsResponse.json()).resolves.toMatchObject({
+        totals: {
+          activePlayers: expect.any(Number),
+          groups: expect.any(Number),
+          weeklyXp: expect.any(Number),
+        },
+        leagues: expect.arrayContaining([
+          expect.objectContaining({
+            key: "iron",
+            activePlayers: expect.any(Number),
+            weeklyXp: expect.any(Number),
+          }),
+        ]),
+      });
     });
 
     it("prevents double XP for the same source_type + source_id + reason", async () => {

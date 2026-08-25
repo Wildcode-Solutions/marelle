@@ -27,6 +27,18 @@ function messageFrom(error: unknown): string {
   return error instanceof ApiError ? error.message : "Une erreur inattendue est survenue.";
 }
 
+function formatLoginDate(value: string | null): string {
+  if (!value) return "Jamais connecté";
+  return `Dernière connexion ${new Date(value).toLocaleString("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })}`;
+}
+
+function loginCountLabel(count: number): string {
+  return `${count} connexion${count > 1 ? "s" : ""}`;
+}
+
 async function loadUsers(): Promise<void> {
   isLoading.value = true;
   errorMessage.value = "";
@@ -148,6 +160,9 @@ onMounted(loadUsers);
                 <small v-if="user.id === auth.user.value?.id">(toi)</small>
               </strong>
               <span>{{ user.email }} · {{ user.schoolLevel.label }} · {{ user.xp }} XP</span>
+              <span class="admin-user-connection">
+                {{ formatLoginDate(user.lastLoginAt) }} · {{ loginCountLabel(user.loginCount) }}
+              </span>
             </div>
             <button class="compact-button" type="button" @click="startEditing(user)">
               Éditer
@@ -175,6 +190,9 @@ onMounted(loadUsers);
             <div class="admin-user-copy">
               <strong>{{ user.displayName }}</strong>
               <span>{{ user.email }} · {{ user.schoolLevel.label }} · {{ user.xp }} XP</span>
+              <span class="admin-user-connection">
+                {{ formatLoginDate(user.lastLoginAt) }} · {{ loginCountLabel(user.loginCount) }}
+              </span>
             </div>
             <div class="admin-row-actions">
               <button class="compact-button" type="button" @click="startEditing(user)">

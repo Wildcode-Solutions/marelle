@@ -3,13 +3,14 @@ import { onMounted, ref } from "vue";
 
 import AdminContentPanel from "@/components/admin/AdminContentPanel.vue";
 import AdminDailyChallengesPanel from "@/components/admin/AdminDailyChallengesPanel.vue";
+import AdminLeaguesPanel from "@/components/admin/AdminLeaguesPanel.vue";
 import AdminSubjectsPanel from "@/components/admin/AdminSubjectsPanel.vue";
 import AdminUsersPanel from "@/components/admin/AdminUsersPanel.vue";
 import ViewHeader from "@/components/ViewHeader.vue";
 import { api } from "@/services/api";
 import type { AdminOverview } from "@/types/domain";
 
-type AdminTab = "overview" | "users" | "subjects" | "content" | "dailyChallenges";
+type AdminTab = "overview" | "leagues" | "users" | "subjects" | "content" | "dailyChallenges";
 
 const activeTab = ref<AdminTab>("overview");
 const overview = ref<AdminOverview | null>(null);
@@ -35,6 +36,14 @@ async function openOverview(): Promise<void> {
   activeTab.value = "overview";
   await loadOverview();
 }
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "Aucune connexion enregistrée";
+  return new Date(value).toLocaleString("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
 </script>
 
 <template>
@@ -46,6 +55,14 @@ async function openOverview(): Promise<void> {
     />
 
     <nav class="admin-tabs" aria-label="Sections d’administration">
+      <button
+        type="button"
+        :class="{ 'admin-tabs__button--active': activeTab === 'leagues' }"
+        @click="activeTab = 'leagues'"
+      >
+        <span aria-hidden="true">🏆</span>
+        Ligues
+      </button>
       <button
         type="button"
         :class="{ 'admin-tabs__button--active': activeTab === 'dailyChallenges' }"
@@ -114,6 +131,16 @@ async function openOverview(): Promise<void> {
             <p>sessions actives</p>
           </article>
           <article class="admin-stat-card">
+            <span aria-hidden="true">↪️</span>
+            <strong>{{ overview.connections.last24Hours }}</strong>
+            <p>connexions sur 24 h</p>
+          </article>
+          <article class="admin-stat-card">
+            <span aria-hidden="true">📅</span>
+            <strong>{{ overview.connections.activeUsersLast7Days }}</strong>
+            <p>utilisateurs connectés sur 7 jours</p>
+          </article>
+          <article class="admin-stat-card">
             <span aria-hidden="true">📚</span>
             <strong>{{ overview.activeSubjects }}</strong>
             <p>matières actives</p>
@@ -146,9 +173,56 @@ async function openOverview(): Promise<void> {
             </div>
           </dl>
         </section>
+
+        <section class="admin-panel" aria-labelledby="connections-title">
+          <div class="admin-panel-heading">
+            <div>
+              <p class="eyebrow">Activité</p>
+              <h2 id="connections-title">Connexions utilisateurs</h2>
+            </div>
+            <p>Dernière : {{ formatDateTime(overview.connections.lastAt) }}</p>
+          </div>
+
+          <dl class="admin-breakdown admin-breakdown--connections">
+            <div>
+              <dt>Sur les 24 dernières heures</dt>
+              <dd>{{ overview.connections.last24Hours }}</dd>
+            </div>
+            <div>
+              <dt>Sur les 7 derniers jours</dt>
+              <dd>{{ overview.connections.last7Days }}</dd>
+            </div>
+            <div>
+              <dt>Depuis le début du suivi</dt>
+              <dd>{{ overview.connections.total }}</dd>
+            </div>
+          </dl>
+
+          <div class="admin-recent-logins">
+            <h3>Connexions récentes</h3>
+            <p v-if="overview.connections.recent.length === 0" class="admin-empty-copy">
+              Aucune connexion enregistrée pour le moment.
+            </p>
+            <template v-else>
+              <article
+                v-for="login in overview.connections.recent"
+                :key="login.id"
+                class="admin-login-row"
+              >
+                <span class="admin-user-avatar" aria-hidden="true">{{ login.avatarEmoji }}</span>
+                <span>
+                  <strong>{{ login.displayName }}</strong>
+                  <small>{{ login.email }}</small>
+                </span>
+                <time :datetime="login.occurredAt">{{ formatDateTime(login.occurredAt) }}</time>
+              </article>
+            </template>
+          </div>
+        </section>
       </template>
     </section>
 
+    <AdminLeaguesPanel v-else-if="activeTab === 'leagues'" />
     <AdminUsersPanel v-else-if="activeTab === 'users'" />
     <AdminSubjectsPanel v-else-if="activeTab === 'subjects'" />
     <AdminDailyChallengesPanel v-else-if="activeTab === 'dailyChallenges'" />

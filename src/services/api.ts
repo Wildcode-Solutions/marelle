@@ -3,6 +3,7 @@ import type {
   AdminDailyChallenge,
   AdminDailyChallengeInput,
   AdminDailyQuestion,
+  AdminLeagueStats,
   AdminOverview,
   AdminQuestion,
   AdminQuestionInput,
@@ -100,6 +101,7 @@ function deleteJson<T>(path: string): Promise<T> {
 export const api = {
   admin: {
     overview: () => requestJson<AdminOverview>("/api/admin/overview"),
+    leagues: () => requestJson<AdminLeagueStats>("/api/admin/leagues"),
     users: (role: UserRole | "all" = "all", offset = 0) =>
       requestJson<AdminUsersResponse>(
         `/api/admin/users?role=${encodeURIComponent(role)}&offset=${offset}&limit=50`,
