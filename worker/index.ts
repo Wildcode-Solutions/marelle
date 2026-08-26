@@ -1,4 +1,4 @@
-import { requireAdminUser, requireSessionUser } from "./lib/auth";
+import { recordLastRequest, requireAdminUser, requireSessionUser } from "./lib/auth";
 import { applyCors, assertAllowedOrigin, HttpError, json, preflight } from "./lib/http";
 import {
   adminCatalog,
@@ -74,9 +74,25 @@ function pathIdentifier(pathname: string, prefix: string): string | null {
   }
 }
 
+async function recordLastRequestSafely(request: Request, env: Env): Promise<void> {
+  try {
+    await recordLastRequest(request, env);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "Could not record the last authenticated request",
+        method: request.method,
+        path: new URL(request.url).pathname,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === "OPTIONS") return preflight(request, env.ALLOWED_ORIGINS);
   assertAllowedOrigin(request, env.ALLOWED_ORIGINS);
+  await recordLastRequestSafely(request, env);
 
   const { pathname } = new URL(request.url);
   const adminUserId = pathIdentifier(pathname, "/api/admin/users/");

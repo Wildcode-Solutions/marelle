@@ -1,3 +1,4 @@
+import { currentAppDate } from "../lib/date";
 import { json } from "../lib/http";
 
 interface ConnectionMetricsRow {
@@ -68,6 +69,7 @@ export async function adminOverview(request: Request, env: Env): Promise<Respons
     env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'"),
     env.DB.prepare("SELECT COUNT(*) AS count FROM auth_sessions WHERE expires_at > unixepoch()"),
     env.DB.prepare("SELECT COUNT(*) AS count FROM subjects WHERE is_active = 1"),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM chapters"),
     env.DB.prepare("SELECT COUNT(*) AS count FROM questions"),
     env.DB.prepare(
       `SELECT
@@ -86,9 +88,14 @@ export async function adminOverview(request: Request, env: Env): Promise<Respons
          MAX(occurred_at) AS last_connection_at
        FROM user_login_events`,
     ),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS count
+       FROM daily_challenges
+       WHERE status = 'published' AND publication_date > ?1`,
+    ).bind(currentAppDate()),
   ]);
 
-  const connectionMetrics = connectionMetricsFrom(results[6]);
+  const connectionMetrics = connectionMetricsFrom(results[7]);
 
   const { results: recentLogins } = await env.DB.prepare(
     `SELECT
@@ -134,9 +141,11 @@ export async function adminOverview(request: Request, env: Env): Promise<Respons
       })),
     },
     activeSubjects: countFrom(results[3], "active subjects"),
+    scheduledDailyChallenges: countFrom(results[8], "scheduled daily challenges"),
     content: {
-      questions: countFrom(results[4], "questions"),
-      answers: countFrom(results[5], "answers"),
+      themes: countFrom(results[4], "themes"),
+      questions: countFrom(results[5], "questions"),
+      answers: countFrom(results[6], "answers"),
     },
   });
 }

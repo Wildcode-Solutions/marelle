@@ -70,6 +70,13 @@ function formatDateTime(value: string | null): string {
       >
         <span aria-hidden="true">▦</span>
         Marelles du jour
+        <span
+          v-if="overview"
+          class="admin-tabs__count"
+          :aria-label="`${overview.scheduledDailyChallenges} Marelles planifiées`"
+        >
+          {{ overview.scheduledDailyChallenges }}
+        </span>
       </button>
       <button
         type="button"
@@ -86,6 +93,13 @@ function formatDateTime(value: string | null): string {
       >
         <span aria-hidden="true">👥</span>
         Comptes
+        <span
+          v-if="overview"
+          class="admin-tabs__count"
+          :aria-label="`${overview.users.total} comptes`"
+        >
+          {{ overview.users.total }}
+        </span>
       </button>
       <button
         type="button"
@@ -94,6 +108,13 @@ function formatDateTime(value: string | null): string {
       >
         <span aria-hidden="true">📚</span>
         Matières
+        <span
+          v-if="overview"
+          class="admin-tabs__count"
+          :aria-label="`${overview.activeSubjects} matières actives`"
+        >
+          {{ overview.activeSubjects }}
+        </span>
       </button>
       <button
         type="button"
@@ -102,6 +123,13 @@ function formatDateTime(value: string | null): string {
       >
         <span aria-hidden="true">🧩</span>
         Contenu
+        <span
+          v-if="overview"
+          class="admin-tabs__count"
+          :aria-label="`${overview.content.themes} thèmes et ${overview.content.questions} questions`"
+        >
+          {{ overview.content.themes }} / {{ overview.content.questions }}
+        </span>
       </button>
     </nav>
 
@@ -225,7 +253,20 @@ function formatDateTime(value: string | null): string {
     <AdminLeaguesPanel v-else-if="activeTab === 'leagues'" />
     <AdminUsersPanel v-else-if="activeTab === 'users'" />
     <AdminSubjectsPanel v-else-if="activeTab === 'subjects'" />
-    <AdminDailyChallengesPanel v-else-if="activeTab === 'dailyChallenges'" />
+    <template v-else-if="activeTab === 'dailyChallenges'">
+      <p
+        v-if="overview?.scheduledDailyChallenges === 0"
+        class="notice admin-schedule-notice"
+        role="status"
+      >
+        <span aria-hidden="true">⚠️</span>
+        <span>
+          <strong>Aucune Marelle n’est planifiée.</strong>
+          Programme la prochaine édition pour assurer la continuité des défis quotidiens.
+        </span>
+      </p>
+      <AdminDailyChallengesPanel @changed="loadOverview" />
+    </template>
     <AdminContentPanel v-else />
   </div>
 </template>

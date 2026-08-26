@@ -15,6 +15,7 @@ interface AdminUserRow {
   created_at: string;
   last_login_at: number | null;
   login_count: number;
+  last_request_at: string | null;
 }
 
 function toAdminUser(row: AdminUserRow) {
@@ -34,6 +35,7 @@ function toAdminUser(row: AdminUserRow) {
     lastLoginAt: row.last_login_at === null
       ? null
       : new Date(row.last_login_at * 1_000).toISOString(),
+    lastRequestAt: row.last_request_at,
   };
 }
 
@@ -79,7 +81,8 @@ async function findUser(env: Env, userId: string): Promise<AdminUserRow | null> 
       u.xp,
       u.created_at,
       COALESCE(login_activity.login_count, 0) AS login_count,
-      login_activity.last_login_at
+      login_activity.last_login_at,
+      u.last_request_at
      FROM users u
      JOIN school_levels l ON l.id = u.school_level_id
      LEFT JOIN (
@@ -115,7 +118,8 @@ export async function adminUsers(request: Request, env: Env): Promise<Response> 
       u.xp,
       u.created_at,
       COALESCE(login_activity.login_count, 0) AS login_count,
-      login_activity.last_login_at
+      login_activity.last_login_at,
+      u.last_request_at
      FROM users u
      JOIN school_levels l ON l.id = u.school_level_id
      LEFT JOIN (

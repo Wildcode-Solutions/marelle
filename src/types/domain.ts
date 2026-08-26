@@ -127,7 +127,9 @@ export interface AdminOverview {
     }>;
   };
   activeSubjects: number;
+  scheduledDailyChallenges: number;
   content: {
+    themes: number;
     questions: number;
     answers: number;
   };
@@ -150,6 +152,7 @@ export interface AdminUser {
   createdAt: string;
   loginCount: number;
   lastLoginAt: string | null;
+  lastRequestAt: string | null;
 }
 
 export interface AdminUsersResponse {

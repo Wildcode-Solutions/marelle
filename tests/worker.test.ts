@@ -79,18 +79,39 @@ describe("Marelle Worker API", () => {
     });
 
     const storedUser = await env.DB.prepare(
-      "SELECT password_hash, password_salt, password_iterations FROM users WHERE id = ?1",
+      `SELECT password_hash, password_salt, password_iterations, last_request_at
+       FROM users
+       WHERE id = ?1`,
     )
       .bind(registerBody.user.id)
       .first<{
         password_hash: string;
         password_salt: string;
         password_iterations: number;
+        last_request_at: string | null;
       }>();
     expect(storedUser?.password_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(storedUser?.password_hash).not.toContain(testPassword);
     expect(storedUser?.password_salt).toMatch(/^[0-9a-f]{32}$/);
     expect(storedUser?.password_iterations).toBe(100_000);
+    expect(storedUser?.last_request_at).not.toBeNull();
+
+    const previousRequestAt = "2000-01-01T00:00:00.000Z";
+    await env.DB.prepare("UPDATE users SET last_request_at = ?1 WHERE id = ?2")
+      .bind(previousRequestAt, registerBody.user.id)
+      .run();
+
+    const trackedRequestResponse = await request("/api/health", {
+      headers: { Cookie: registerCookie },
+    });
+    expect(trackedRequestResponse.status).toBe(200);
+    const activity = await env.DB.prepare(
+      "SELECT last_request_at FROM users WHERE id = ?1",
+    )
+      .bind(registerBody.user.id)
+      .first<{ last_request_at: string | null }>();
+    expect(activity?.last_request_at).not.toBe(previousRequestAt);
+    expect(Date.parse(activity?.last_request_at ?? "")).not.toBeNaN();
 
     const meResponse = await request("/api/auth/me", {
       headers: { Cookie: registerCookie },
@@ -180,7 +201,8 @@ describe("Marelle Worker API", () => {
           ],
         },
         activeSubjects: 6,
-        content: { questions: 2, answers: 6 },
+        scheduledDailyChallenges: 0,
+        content: { themes: 6, questions: 2, answers: 6 },
       });
 
       const leaguesResponse = await request("/api/admin/leagues", {
@@ -208,13 +230,16 @@ describe("Marelle Worker API", () => {
       });
       expect(usersResponse.status).toBe(200);
       await expect(usersResponse.json()).resolves.toMatchObject({
-        users: [{
-          id: "demo-user",
-          displayName: "Camille",
-          role: "student",
-          loginCount: 0,
-          lastLoginAt: null,
-        }],
+        users: [
+          {
+            id: "demo-user",
+            displayName: "Camille",
+            role: "student",
+            loginCount: 0,
+            lastLoginAt: null,
+            lastRequestAt: null,
+          },
+        ],
         pagination: { limit: 50, offset: 0, hasMore: false },
       });
 

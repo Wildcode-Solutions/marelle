@@ -15,6 +15,10 @@ const isSaving = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
 const editingUser = ref<AdminUser | null>(null);
+const requestDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 const form = reactive({
   displayName: "",
@@ -37,6 +41,12 @@ function formatLoginDate(value: string | null): string {
 
 function loginCountLabel(count: number): string {
   return `${count} connexion${count > 1 ? "s" : ""}`;
+}
+
+function formatLastRequest(value: string | null): string {
+  if (!value) return "jamais";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : requestDateFormatter.format(date);
 }
 
 async function loadUsers(): Promise<void> {
@@ -163,6 +173,7 @@ onMounted(loadUsers);
               <span class="admin-user-connection">
                 {{ formatLoginDate(user.lastLoginAt) }} · {{ loginCountLabel(user.loginCount) }}
               </span>
+              <span>Dernière requête : {{ formatLastRequest(user.lastRequestAt) }}</span>
             </div>
             <button class="compact-button" type="button" @click="startEditing(user)">
               Éditer
@@ -193,6 +204,7 @@ onMounted(loadUsers);
               <span class="admin-user-connection">
                 {{ formatLoginDate(user.lastLoginAt) }} · {{ loginCountLabel(user.loginCount) }}
               </span>
+              <span>Dernière requête : {{ formatLastRequest(user.lastRequestAt) }}</span>
             </div>
             <div class="admin-row-actions">
               <button class="compact-button" type="button" @click="startEditing(user)">

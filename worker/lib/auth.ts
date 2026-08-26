@@ -165,6 +165,24 @@ export async function getSessionUser(request: Request, env: Env): Promise<AuthUs
   return row ? toAuthUser(row) : null;
 }
 
+export async function recordLastRequest(request: Request, env: Env): Promise<void> {
+  const token = getSessionToken(request);
+  if (!token) return;
+
+  const tokenHash = await hashSessionToken(token);
+  await env.DB.prepare(
+    `UPDATE users
+     SET last_request_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = (
+       SELECT user_id
+       FROM auth_sessions
+       WHERE token_hash = ?1 AND expires_at > unixepoch()
+     )`,
+  )
+    .bind(tokenHash)
+    .run();
+}
+
 export async function requireSessionUser(request: Request, env: Env): Promise<AuthUser> {
   const user = await getSessionUser(request, env);
   if (!user) throw new HttpError(401, "Authentification requise.");

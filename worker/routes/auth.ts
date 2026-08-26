@@ -170,8 +170,9 @@ export async function register(request: Request, env: Env): Promise<Response> {
           school_level_id,
           password_hash,
           password_salt,
-          password_iterations
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+          password_iterations,
+          last_request_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
       ).bind(
         userId,
         email,
@@ -254,6 +255,9 @@ export async function login(request: Request, env: Env): Promise<Response> {
     env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()"),
     sessionInsertStatement(env, session),
     loginEventInsertStatement(env, session, "login"),
+    env.DB.prepare(
+      "UPDATE users SET last_request_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1",
+    ).bind(row.id),
   ]);
 
   return json(request, { user: toAuthUser(row) }, {
