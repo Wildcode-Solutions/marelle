@@ -4,8 +4,15 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-18",
   "compatibility_flags": ["nodejs_compat"],
+  "secrets": {
+    "required": ["MAILGUN_API_KEY"]
+  },
   "vars": {
-    "ALLOWED_ORIGINS": "https://marelle.wildcode-solutions.com"
+    "ALLOWED_ORIGINS": "https://marelle.wildcode-solutions.com",
+    "MAILGUN_DOMAIN": "",
+    "MAILGUN_FROM_EMAIL": "",
+    "MAILGUN_FROM_NAME": "Marelle",
+    "MAILGUN_REGION": "eu"
   },
   "assets": {
     "directory": "./dist",
