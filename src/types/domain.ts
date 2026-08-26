@@ -111,7 +111,9 @@ export interface AdminOverview {
   };
   activeSessions: number;
   activeSubjects: number;
+  scheduledDailyChallenges: number;
   content: {
+    themes: number;
     questions: number;
     answers: number;
   };

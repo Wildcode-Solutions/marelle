@@ -11,6 +11,8 @@ import type {
   QuestionKind,
 } from "@/types/domain";
 
+const emit = defineEmits<{ changed: [] }>();
+
 const challenges = ref<AdminDailyChallenge[]>([]);
 const questionLibrary = ref<AdminDailyQuestion[]>([]);
 const catalog = ref<AdminCatalog>({ schoolLevels: [], subjects: [] });
@@ -182,6 +184,7 @@ async function saveChallenge(): Promise<void> {
       : await api.admin.createDailyChallenge(inputFromForm());
     showForm.value = false;
     await loadWorkspace();
+    emit("changed");
     successMessage.value = `La Marelle du ${formatDate(response.challenge.date)} a été enregistrée.`;
   } catch (error) {
     errorMessage.value = messageFrom(error);
@@ -203,6 +206,7 @@ async function togglePublication(challenge: AdminDailyChallenge): Promise<void> 
         .map((question) => question.id),
     });
     await loadWorkspace();
+    emit("changed");
     successMessage.value = status === "published" ? "La Marelle est publiée." : "La Marelle est dépubliée.";
   } catch (error) {
     errorMessage.value = messageFrom(error);
@@ -215,6 +219,7 @@ async function deleteChallenge(challenge: AdminDailyChallenge): Promise<void> {
   try {
     await api.admin.deleteDailyChallenge(challenge.id);
     await loadWorkspace();
+    emit("changed");
     successMessage.value = "La Marelle a été supprimée.";
   } catch (error) {
     errorMessage.value = messageFrom(error);

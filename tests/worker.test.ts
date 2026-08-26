@@ -183,7 +183,8 @@ describe("Marelle Worker API", () => {
         users: { total: 2, students: 1, admins: 1 },
         activeSessions: 1,
         activeSubjects: 6,
-        content: { questions: 2, answers: 6 },
+        scheduledDailyChallenges: 0,
+        content: { themes: 6, questions: 2, answers: 6 },
       });
 
       const usersResponse = await request("/api/admin/users?role=student", {
