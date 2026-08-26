@@ -62,6 +62,8 @@ const kindLabels: Record<QuestionKind, string> = {
   matching: "Association",
 };
 
+const questionKindOptions = Object.entries(kindLabels) as [QuestionKind, string][];
+
 const statusLabels: Record<QuestionStatus, string> = {
   draft: "Brouillon",
   published: "Publiée",
@@ -485,18 +487,22 @@ onMounted(loadWorkspace);
           </div>
           <button class="icon-button" type="button" aria-label="Fermer" @click="showQuestionForm = false">×</button>
         </div>
-        <label class="form-field">
-          <span>Type d’exercice</span>
-          <select v-model="questionForm.kind" @change="changeQuestionKind">
-            <option value="multiple_choice">QCM</option>
-            <option value="true_false">Vrai / faux</option>
-            <option value="short_answer">Réponse libre</option>
-            <option value="numeric">Réponse numérique</option>
-            <option value="fill_in_blank">Texte à trous</option>
-            <option value="ordering">Mise en ordre</option>
-            <option value="matching">Association</option>
-          </select>
-        </label>
+        <fieldset class="question-kind-picker">
+          <legend>Type d’exercice</legend>
+          <div class="question-kind-picker__options">
+            <label v-for="([value, label]) in questionKindOptions" :key="value">
+              <input
+                v-model="questionForm.kind"
+                class="sr-only"
+                type="radio"
+                name="question-kind"
+                :value="value"
+                @change="changeQuestionKind"
+              />
+              <span>{{ label }}</span>
+            </label>
+          </div>
+        </fieldset>
         <label class="form-field">
           <span>Question</span>
           <textarea
