@@ -132,6 +132,7 @@ export interface AdminUser {
   schoolLevel: SchoolLevel;
   xp: number;
   createdAt: string;
+  lastRequestAt: string | null;
 }
 
 export interface AdminUsersResponse {

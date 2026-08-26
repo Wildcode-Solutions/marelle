@@ -13,6 +13,7 @@ interface AdminUserRow {
   school_level_label: string;
   xp: number;
   created_at: string;
+  last_request_at: string | null;
 }
 
 function toAdminUser(row: AdminUserRow) {
@@ -28,6 +29,7 @@ function toAdminUser(row: AdminUserRow) {
     },
     xp: row.xp,
     createdAt: row.created_at,
+    lastRequestAt: row.last_request_at,
   };
 }
 
@@ -71,7 +73,8 @@ async function findUser(env: Env, userId: string): Promise<AdminUserRow | null> 
       u.school_level_id,
       l.label AS school_level_label,
       u.xp,
-      u.created_at
+      u.created_at,
+      u.last_request_at
      FROM users u
      JOIN school_levels l ON l.id = u.school_level_id
      WHERE u.id = ?1`,
@@ -100,7 +103,8 @@ export async function adminUsers(request: Request, env: Env): Promise<Response> 
       u.school_level_id,
       l.label AS school_level_label,
       u.xp,
-      u.created_at
+      u.created_at,
+      u.last_request_at
      FROM users u
      JOIN school_levels l ON l.id = u.school_level_id
      WHERE (?1 IS NULL OR u.role = ?1)

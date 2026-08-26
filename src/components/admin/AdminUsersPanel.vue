@@ -15,6 +15,10 @@ const isSaving = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
 const editingUser = ref<AdminUser | null>(null);
+const requestDateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 const form = reactive({
   displayName: "",
@@ -25,6 +29,12 @@ const form = reactive({
 
 function messageFrom(error: unknown): string {
   return error instanceof ApiError ? error.message : "Une erreur inattendue est survenue.";
+}
+
+function formatLastRequest(value: string | null): string {
+  if (!value) return "jamais";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : requestDateFormatter.format(date);
 }
 
 async function loadUsers(): Promise<void> {
@@ -148,6 +158,7 @@ onMounted(loadUsers);
                 <small v-if="user.id === auth.user.value?.id">(toi)</small>
               </strong>
               <span>{{ user.email }} · {{ user.schoolLevel.label }} · {{ user.xp }} XP</span>
+              <span>Dernière requête : {{ formatLastRequest(user.lastRequestAt) }}</span>
             </div>
             <button class="compact-button" type="button" @click="startEditing(user)">
               Éditer
@@ -175,6 +186,7 @@ onMounted(loadUsers);
             <div class="admin-user-copy">
               <strong>{{ user.displayName }}</strong>
               <span>{{ user.email }} · {{ user.schoolLevel.label }} · {{ user.xp }} XP</span>
+              <span>Dernière requête : {{ formatLastRequest(user.lastRequestAt) }}</span>
             </div>
             <div class="admin-row-actions">
               <button class="compact-button" type="button" @click="startEditing(user)">
