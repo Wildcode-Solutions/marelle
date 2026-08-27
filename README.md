@@ -48,46 +48,6 @@ application Capacitor ou un front hébergé séparément, utiliser l’URL HTTPS
 Le binding D1 n’utilise aucun jeton API dans `.env`. Wrangler s’authentifie auprès de Cloudflare
 avec `npx wrangler login`, ou avec un secret `CLOUDFLARE_API_TOKEN` fourni par la CI.
 
-## Notifications email avec Mailgun
-
-Le socle de notifications est prêt dans `worker/notifications/`. Il sépare le service métier du
-canal d’envoi Mailgun afin de pouvoir ajouter plus tard d’autres canaux sans modifier les appels
-existants. Aucun email n’est encore déclenché automatiquement.
-
-1. [Créer et vérifier un domaine d’envoi Mailgun](https://documentation.mailgun.com/docs/mailgun/user-manual/domains/domains-verify),
-   idéalement un sous-domaine comme `mg.example.com`, dans la région EU. Ajouter les
-   enregistrements DNS SPF et DKIM fournis par Mailgun, puis configurer DMARC sur le domaine.
-2. Pour le développement local, copier `.dev.vars.example` vers `.dev.vars` et compléter les trois
-   variables Mailgun. `.dev.vars` est ignoré par Git et ne doit jamais être committé.
-3. Dans `wrangler.jsonc`, renseigner `MAILGUN_DOMAIN` et `MAILGUN_FROM_EMAIL`. La région `eu` et le
-   nom d’expéditeur `Marelle` peuvent aussi y être adaptés.
-4. En production, enregistrer la clé sans la placer dans Git :
-
-```bash
-npx wrangler secret put MAILGUN_API_KEY
-```
-
-Le service s’instancie au moment du futur déclenchement métier :
-
-```ts
-import { createNotificationService } from "./notifications";
-
-const notifications = createNotificationService(env);
-await notifications.sendEmail({
-  to: { email: user.email, name: user.displayName },
-  subject: "Ta notification Marelle",
-  text: "Version texte obligatoire.",
-  html: "<p>Version HTML facultative.</p>",
-  tags: ["transactional"],
-});
-```
-
-L’envoi utilise [l’API HTTP Mailgun](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages)
-de la région choisie, impose une version texte, limite le délai réseau et remonte les erreurs
-temporaires comme réessayables. Pour un envoi non bloquant, transmettre la promesse à
-`ctx.waitUntil()` ; pour des volumes ou des reprises automatiques, utiliser une Queue Cloudflare
-avant d’activer les premiers événements.
-
 ## Base D1
 
 La configuration D1 se trouve dans `wrangler.jsonc`. Les migrations sont dans `migrations/`.

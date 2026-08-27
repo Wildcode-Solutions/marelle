@@ -1,4 +1,0 @@
-# Variables locales du Worker uniquement. Copier ce fichier vers `.dev.vars`, qui est ignoré par Git.
-MAILGUN_API_KEY=
-MAILGUN_DOMAIN=
-MAILGUN_FROM_EMAIL=
