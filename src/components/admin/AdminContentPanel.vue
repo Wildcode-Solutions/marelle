@@ -43,6 +43,7 @@ const questionForm = reactive<Omit<AdminQuestionInput, "choices" | "items">>({
   prompt: "",
   explanation: "",
   expectedAnswer: "",
+  acceptedAnswers: [],
   numericTolerance: null,
   answerUnit: "",
   difficulty: 1,
@@ -199,6 +200,7 @@ function newQuestion(): void {
   questionForm.prompt = "";
   questionForm.explanation = "";
   questionForm.expectedAnswer = "";
+  questionForm.acceptedAnswers = [];
   questionForm.numericTolerance = null;
   questionForm.answerUnit = "";
   questionForm.difficulty = 1;
@@ -217,6 +219,7 @@ function editQuestion(question: AdminQuestion): void {
   questionForm.prompt = question.prompt;
   questionForm.explanation = question.explanation;
   questionForm.expectedAnswer = question.expectedAnswer ?? "";
+  questionForm.acceptedAnswers = [...question.acceptedAnswers];
   questionForm.numericTolerance = question.numericTolerance;
   questionForm.answerUnit = question.answerUnit ?? "";
   questionForm.difficulty = question.difficulty;
@@ -238,14 +241,9 @@ function changeQuestionKind(): void {
   choices.value = defaultChoices(questionForm.kind);
   items.value = defaultItems(questionForm.kind);
   questionForm.expectedAnswer = "";
+  questionForm.acceptedAnswers = [];
   questionForm.numericTolerance = questionForm.kind === "numeric" ? 0 : null;
   questionForm.answerUnit = "";
-}
-
-function markCorrect(index: number): void {
-  choices.value.forEach((choice, choiceIndex) => {
-    choice.isCorrect = choiceIndex === index;
-  });
 }
 
 function addChoice(): void {
@@ -256,7 +254,25 @@ function removeChoice(index: number): void {
   if (choices.value.length <= 2) return;
   const removedWasCorrect = choices.value[index]?.isCorrect;
   choices.value.splice(index, 1);
-  if (removedWasCorrect && choices.value[0]) choices.value[0].isCorrect = true;
+  if (removedWasCorrect && choices.value.every((choice) => !choice.isCorrect) && choices.value[0]) {
+    choices.value[0].isCorrect = true;
+  }
+}
+
+function addAcceptedAnswer(): void {
+  if (questionForm.acceptedAnswers.length < 10) questionForm.acceptedAnswers.push("");
+}
+
+function removeAcceptedAnswer(index: number): void {
+  questionForm.acceptedAnswers.splice(index, 1);
+}
+
+function addItemAcceptedAnswer(item: AdminQuestionItem): void {
+  if (item.acceptedAnswers.length < 5) item.acceptedAnswers.push("");
+}
+
+function removeItemAcceptedAnswer(item: AdminQuestionItem, index: number): void {
+  item.acceptedAnswers.splice(index, 1);
 }
 
 function addItem(): void {
@@ -288,6 +304,9 @@ async function saveQuestion(): Promise<void> {
       expectedAnswer: questionForm.kind === "short_answer" || questionForm.kind === "numeric"
         ? questionForm.expectedAnswer
         : null,
+      acceptedAnswers: questionForm.kind === "short_answer" || questionForm.kind === "numeric"
+        ? [...questionForm.acceptedAnswers]
+        : [],
       numericTolerance: questionForm.kind === "numeric" ? questionForm.numericTolerance : null,
       answerUnit: questionForm.kind === "numeric" ? questionForm.answerUnit : null,
       choices: isChoiceKind(questionForm.kind)
@@ -521,14 +540,12 @@ onMounted(loadWorkspace);
         </label>
 
         <fieldset v-if="isChoiceKind(questionForm.kind)" class="choice-editor">
-          <legend>Réponses <small>— coche la bonne réponse</small></legend>
+          <legend>Réponses <small>— coche une ou plusieurs bonnes réponses</small></legend>
           <div v-for="(choice, index) in choices" :key="index" class="choice-editor-row">
             <input
-              :checked="choice.isCorrect"
-              type="radio"
-              name="correct-choice"
+              v-model="choice.isCorrect"
+              type="checkbox"
               :aria-label="`Marquer la réponse ${index + 1} comme correcte`"
-              @change="markCorrect(index)"
             />
             <input
               v-model="choice.label"
@@ -558,19 +575,51 @@ onMounted(loadWorkspace);
           </button>
         </fieldset>
 
-        <label
+        <fieldset
           v-else-if="questionForm.kind === 'short_answer' || questionForm.kind === 'numeric'"
-          class="form-field"
+          class="choice-editor answer-variants-editor"
         >
-          <span>Réponse attendue</span>
-          <input
-            v-model="questionForm.expectedAnswer"
-            required
-            maxlength="200"
-            :inputmode="questionForm.kind === 'numeric' ? 'decimal' : 'text'"
-            :placeholder="questionForm.kind === 'numeric' ? 'Ex. 12,5' : 'La réponse à comparer'"
-          />
-        </label>
+          <legend>Bonnes réponses <small>— une seule suffit pour valider</small></legend>
+          <label class="form-field">
+            <span>Réponse principale</span>
+            <input
+              v-model="questionForm.expectedAnswer"
+              required
+              maxlength="200"
+              :inputmode="questionForm.kind === 'numeric' ? 'decimal' : 'text'"
+              :placeholder="questionForm.kind === 'numeric' ? 'Ex. 12,5' : 'Ex. Français'"
+            />
+          </label>
+          <div
+            v-for="(_, index) in questionForm.acceptedAnswers"
+            :key="index"
+            class="choice-editor-row answer-variant-row"
+          >
+            <span class="question-item-editor__position">{{ index + 2 }}</span>
+            <input
+              v-model="questionForm.acceptedAnswers[index]"
+              required
+              maxlength="200"
+              :inputmode="questionForm.kind === 'numeric' ? 'decimal' : 'text'"
+              :placeholder="questionForm.kind === 'numeric' ? 'Autre valeur acceptée' : 'Ex. French'"
+              :aria-label="`Variante acceptée ${index + 1}`"
+            />
+            <button
+              class="icon-button icon-button--small"
+              type="button"
+              :aria-label="`Supprimer la variante ${index + 1}`"
+              @click="removeAcceptedAnswer(index)"
+            >×</button>
+          </div>
+          <button
+            v-if="questionForm.acceptedAnswers.length < 10"
+            class="compact-button"
+            type="button"
+            @click="addAcceptedAnswer"
+          >
+            + Ajouter une bonne réponse
+          </button>
+        </fieldset>
 
         <div v-if="questionForm.kind === 'numeric'" class="admin-form-grid">
           <label class="form-field">
@@ -599,52 +648,83 @@ onMounted(loadWorkspace);
           <div
             v-for="(item, index) in items"
             :key="index"
-            class="question-item-editor"
-            :class="{ 'question-item-editor--matching': questionForm.kind === 'matching' }"
+            class="question-item-editor-group"
           >
-            <span class="question-item-editor__position">{{ index + 1 }}</span>
-            <input
-              v-if="questionForm.kind === 'matching'"
-              v-model="item.prompt"
-              required
-              maxlength="200"
-              :placeholder="`Élément ${index + 1}`"
-              :aria-label="`Élément à associer ${index + 1}`"
-            />
-            <input
-              v-model="item.answer"
-              required
-              maxlength="300"
-              :placeholder="questionForm.kind === 'matching'
-                ? `Réponse associée ${index + 1}`
-                : `Réponse ${index + 1}`"
-              :aria-label="`Réponse ${index + 1}`"
-            />
-            <span class="question-item-editor__actions">
+            <div
+              class="question-item-editor"
+              :class="{ 'question-item-editor--matching': questionForm.kind === 'matching' }"
+            >
+              <span class="question-item-editor__position">{{ index + 1 }}</span>
+              <input
+                v-if="questionForm.kind === 'matching'"
+                v-model="item.prompt"
+                required
+                maxlength="200"
+                :placeholder="`Élément ${index + 1}`"
+                :aria-label="`Élément à associer ${index + 1}`"
+              />
+              <input
+                v-model="item.answer"
+                required
+                maxlength="300"
+                :placeholder="questionForm.kind === 'matching'
+                  ? `Réponse associée ${index + 1}`
+                  : `Réponse ${index + 1}`"
+                :aria-label="`Réponse ${index + 1}`"
+              />
+              <span class="question-item-editor__actions">
+                <button
+                  v-if="questionForm.kind === 'ordering'"
+                  class="icon-button icon-button--small"
+                  type="button"
+                  :disabled="index === 0"
+                  :aria-label="`Monter l’élément ${index + 1}`"
+                  @click="moveItem(index, -1)"
+                >↑</button>
+                <button
+                  v-if="questionForm.kind === 'ordering'"
+                  class="icon-button icon-button--small"
+                  type="button"
+                  :disabled="index === items.length - 1"
+                  :aria-label="`Descendre l’élément ${index + 1}`"
+                  @click="moveItem(index, 1)"
+                >↓</button>
+                <button
+                  class="icon-button icon-button--small"
+                  type="button"
+                  :disabled="items.length <= (questionForm.kind === 'fill_in_blank' ? 1 : 2)"
+                  :aria-label="`Supprimer l’élément ${index + 1}`"
+                  @click="removeItem(index)"
+                >×</button>
+              </span>
+            </div>
+            <div v-if="questionForm.kind === 'fill_in_blank'" class="item-answer-variants">
+              <label
+                v-for="(_, answerIndex) in item.acceptedAnswers"
+                :key="answerIndex"
+                class="answer-variant-row"
+              >
+                <span>Variante {{ answerIndex + 1 }}</span>
+                <input
+                  v-model="item.acceptedAnswers[answerIndex]"
+                  required
+                  maxlength="200"
+                  placeholder="Autre réponse acceptée"
+                />
+                <button
+                  class="icon-button icon-button--small"
+                  type="button"
+                  :aria-label="`Supprimer la variante ${answerIndex + 1} du blanc ${index + 1}`"
+                  @click="removeItemAcceptedAnswer(item, answerIndex)"
+                >×</button>
+              </label>
               <button
-                v-if="questionForm.kind === 'ordering'"
-                class="icon-button icon-button--small"
+                v-if="item.acceptedAnswers.length < 5"
+                class="text-button"
                 type="button"
-                :disabled="index === 0"
-                :aria-label="`Monter l’élément ${index + 1}`"
-                @click="moveItem(index, -1)"
-              >↑</button>
-              <button
-                v-if="questionForm.kind === 'ordering'"
-                class="icon-button icon-button--small"
-                type="button"
-                :disabled="index === items.length - 1"
-                :aria-label="`Descendre l’élément ${index + 1}`"
-                @click="moveItem(index, 1)"
-              >↓</button>
-              <button
-                class="icon-button icon-button--small"
-                type="button"
-                :disabled="items.length <= (questionForm.kind === 'fill_in_blank' ? 1 : 2)"
-                :aria-label="`Supprimer l’élément ${index + 1}`"
-                @click="removeItem(index)"
-              >×</button>
-            </span>
+                @click="addItemAcceptedAnswer(item)"
+              >+ Ajouter une variante pour ce blanc</button>
+            </div>
           </div>
           <button
             v-if="items.length < (questionForm.kind === 'fill_in_blank' ? 6 : 8)"

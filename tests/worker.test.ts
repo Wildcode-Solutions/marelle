@@ -396,7 +396,7 @@ describe("Marelle Worker API", () => {
           xpReward: 10,
           status: "draft",
           choices: [
-            { label: "36", isCorrect: false },
+            { label: "36", isCorrect: true },
             { label: "48", isCorrect: true },
             { label: "52", isCorrect: false },
           ],
@@ -407,7 +407,11 @@ describe("Marelle Worker API", () => {
         question: { id: string; choices: Array<{ label: string; isCorrect: boolean }> };
       }>();
       expect(qcmBody.question.choices).toHaveLength(3);
-      expect(qcmBody.question.choices.find((choice) => choice.isCorrect)?.label).toBe("48");
+      expect(
+        qcmBody.question.choices
+          .filter((choice) => choice.isCorrect)
+          .map((choice) => choice.label),
+      ).toEqual(["36", "48"]);
 
       const freeAnswerResponse = await request("/api/admin/questions", {
         method: "POST",
@@ -670,8 +674,12 @@ describe("Marelle Worker API", () => {
     const questionId = `q-daily-${crypto.randomUUID()}`;
     await env.DB.prepare(
       `INSERT INTO questions (
-        id, chapter_id, kind, prompt, explanation, expected_answer, difficulty, xp_reward, status
-      ) VALUES (?1, 'history-6e-antiquity', 'short_answer', ?2, ?3, 'Athènes', 2, 12, 'published')`,
+        id, chapter_id, kind, prompt, explanation, expected_answer, accepted_answers,
+        difficulty, xp_reward, status
+      ) VALUES (
+        ?1, 'history-6e-antiquity', 'short_answer', ?2, ?3, 'Athènes', '["Athens"]',
+        2, 12, 'published'
+      )`,
     )
       .bind(
         questionId,
@@ -679,6 +687,9 @@ describe("Marelle Worker API", () => {
         "Athènes développe une forme de démocratie directe dans l’Antiquité.",
       )
       .run();
+    await env.DB.prepare(
+      "UPDATE answer_choices SET is_correct = 1 WHERE id = 'a-math-1'",
+    ).run();
 
     const today = Object.fromEntries(
       new Intl.DateTimeFormat("en-GB", {
@@ -800,6 +811,7 @@ describe("Marelle Worker API", () => {
     expect(JSON.stringify(currentBody)).not.toContain("isCorrect");
     expect(JSON.stringify(currentBody)).not.toContain("expectedAnswer");
     expect(JSON.stringify(currentBody)).not.toContain("Athènes");
+    expect(JSON.stringify(currentBody)).not.toContain("Athens");
 
     const startResponse = await request("/api/daily-challenge/start", {
       method: "POST",
@@ -835,14 +847,14 @@ describe("Marelle Worker API", () => {
       body: JSON.stringify({
         attemptId: startBody.challenge.participation.attemptId,
         questionId: "q-math-place-value",
-        answerChoiceId: "a-math-2",
+        answerChoiceId: "a-math-1",
         answerText: null,
         responseTimeMs: 820,
       }),
     });
     expect(firstAnswerResponse.status).toBe(200);
     await expect(firstAnswerResponse.json()).resolves.toMatchObject({
-      feedback: { isCorrect: true, correctAnswer: "7" },
+      feedback: { isCorrect: true, correctAnswer: "4 ou 7" },
       progress: { answered: 1, score: 1, total: 3, readyToFinish: false },
     });
 
@@ -852,7 +864,7 @@ describe("Marelle Worker API", () => {
       body: JSON.stringify({
         attemptId: startBody.challenge.participation.attemptId,
         questionId: "q-math-place-value",
-        answerChoiceId: "a-math-2",
+        answerChoiceId: "a-math-1",
         answerText: null,
         responseTimeMs: 500,
       }),
@@ -887,13 +899,13 @@ describe("Marelle Worker API", () => {
         attemptId: startBody.challenge.participation.attemptId,
         questionId,
         answerChoiceId: null,
-        answerText: "  ATHÈNES ",
+        answerText: "  ATHENS ",
         responseTimeMs: 1900,
       }),
     });
     expect(freeAnswerResponse.status).toBe(200);
     await expect(freeAnswerResponse.json()).resolves.toMatchObject({
-      feedback: { isCorrect: true, correctAnswer: "Athènes" },
+      feedback: { isCorrect: true, correctAnswer: "Athènes ou Athens" },
       progress: { answered: 3, score: 2, readyToFinish: true },
     });
 
@@ -1035,6 +1047,7 @@ describe("Marelle Worker API", () => {
         prompt: "Quelle couleur obtient-on avec du jaune et du bleu ?",
         explanation: "Le jaune et le bleu donnent du vert.",
         expectedAnswer: "vert",
+        acceptedAnswers: ["green"],
         numericTolerance: null,
         answerUnit: null,
         choices: [],
@@ -1042,9 +1055,10 @@ describe("Marelle Worker API", () => {
       },
       {
         kind: "numeric",
-        prompt: "Donne une approximation de π au centième.",
-        explanation: "π vaut environ 3,14.",
-        expectedAnswer: "3,14",
+        prompt: "Donne une solution de x² = 4.",
+        explanation: "Les deux solutions sont 2 et −2.",
+        expectedAnswer: "2",
+        acceptedAnswers: ["-2"],
         numericTolerance: 0.01,
         answerUnit: null,
         choices: [],
@@ -1055,6 +1069,7 @@ describe("Marelle Worker API", () => {
         prompt: "Le ciel est {{1}} et l’herbe est {{2}}.",
         explanation: "On associe généralement le ciel au bleu et l’herbe au vert.",
         expectedAnswer: null,
+        acceptedAnswers: [],
         numericTolerance: null,
         answerUnit: null,
         choices: [],
@@ -1068,6 +1083,7 @@ describe("Marelle Worker API", () => {
         prompt: "Range ces saisons à partir du début de l’année.",
         explanation: "L’hiver précède le printemps, l’été puis l’automne.",
         expectedAnswer: null,
+        acceptedAnswers: [],
         numericTolerance: null,
         answerUnit: null,
         choices: [],
@@ -1083,6 +1099,7 @@ describe("Marelle Worker API", () => {
         prompt: "Associe chaque pays à sa capitale.",
         explanation: "Paris et Rome sont les capitales de la France et de l’Italie.",
         expectedAnswer: null,
+        acceptedAnswers: [],
         numericTolerance: null,
         answerUnit: null,
         choices: [],
@@ -1094,6 +1111,7 @@ describe("Marelle Worker API", () => {
     ] as const;
 
     const createdQuestions: Array<{
+      acceptedAnswers: string[];
       id: string;
       kind: string;
       items: Array<{ id: string; position: number }>;
@@ -1113,6 +1131,7 @@ describe("Marelle Worker API", () => {
       expect(response.status).toBe(201);
       const body = await response.json<{
         question: {
+          acceptedAnswers: string[];
           id: string;
           kind: string;
           items: Array<{ id: string; position: number }>;
@@ -1123,6 +1142,8 @@ describe("Marelle Worker API", () => {
     expect(createdQuestions.map((question) => question.kind)).toEqual(
       inputs.map((input) => input.kind),
     );
+    expect(createdQuestions[0]?.acceptedAnswers).toEqual(["green"]);
+    expect(createdQuestions[1]?.acceptedAnswers).toEqual(["-2"]);
 
     const today = Object.fromEntries(
       new Intl.DateTimeFormat("en-GB", {
@@ -1187,8 +1208,8 @@ describe("Marelle Worker API", () => {
     const ordering = createdQuestions.find((question) => question.kind === "ordering")!;
     const matching = createdQuestions.find((question) => question.kind === "matching")!;
     const answers = [
-      { answerText: " VERT " },
-      { answerText: "3,145" },
+      { answerText: " GREEN " },
+      { answerText: "-2" },
       { blankAnswers: ["azur", "vert"] },
       { orderedItemIds: ordering.items.map((item) => item.id) },
       {

@@ -33,6 +33,7 @@ interface QuestionJoinedRow {
   prompt: string;
   explanation: string;
   expected_answer: string | null;
+  question_accepted_answers: string;
   numeric_tolerance: number | null;
   answer_unit: string | null;
   difficulty: number;
@@ -64,6 +65,7 @@ interface QuestionInput {
   choices: ChoiceInput[];
   difficulty: number;
   expectedAnswer: string | null;
+  acceptedAnswers: string[];
   numericTolerance: number | null;
   answerUnit: string | null;
   explanation: string;
@@ -103,6 +105,44 @@ function integerValue(
 function booleanValue(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") throw new HttpError(400, `Le champ ${field} est invalide.`);
   return value;
+}
+
+function acceptedAnswerInput(
+  value: unknown,
+  primaryAnswer: string,
+  options: { maximum?: number; numeric?: boolean } = {},
+): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > (options.maximum ?? 10)) {
+    throw new HttpError(400, "Les variantes de réponse sont invalides.");
+  }
+
+  const answers = value.map((answer) => {
+    if (typeof answer !== "string") {
+      throw new HttpError(400, "Une variante de réponse est invalide.");
+    }
+    const trimmed = answer.trim();
+    if (!trimmed || trimmed.length > 200) {
+      throw new HttpError(400, "Une variante de réponse est invalide.");
+    }
+    if (!options.numeric) return trimmed;
+    const numericAnswer = Number(trimmed.replace(",", "."));
+    if (!Number.isFinite(numericAnswer)) {
+      throw new HttpError(400, "Une variante numérique est invalide.");
+    }
+    return String(numericAnswer);
+  });
+  const normalize = (answer: string): string =>
+    answer.trim().replace(/\s+/g, " ").toLocaleLowerCase("fr-FR");
+  const normalizedPrimary = normalize(primaryAnswer);
+  const normalizedAnswers = answers.map(normalize);
+  if (
+    new Set(normalizedAnswers).size !== normalizedAnswers.length ||
+    normalizedAnswers.includes(normalizedPrimary)
+  ) {
+    throw new HttpError(400, "Chaque variante de réponse doit être unique.");
+  }
+  return answers;
 }
 
 function pagination(url: URL): { limit: number; offset: number } {
@@ -401,6 +441,7 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
     return {
       ...common,
       expectedAnswer,
+      acceptedAnswers: acceptedAnswerInput(body.acceptedAnswers, expectedAnswer),
       numericTolerance: null,
       answerUnit: null,
       choices: [],
@@ -428,6 +469,9 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
     return {
       ...common,
       expectedAnswer: String(numericValue),
+      acceptedAnswers: acceptedAnswerInput(body.acceptedAnswers, String(numericValue), {
+        numeric: true,
+      }),
       numericTolerance,
       answerUnit: answerUnit || null,
       choices: [],
@@ -450,21 +494,11 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
         ? item.answer.trim()
         : "";
       const rawAcceptedAnswers = "acceptedAnswers" in item ? item.acceptedAnswers : [];
-      if (!Array.isArray(rawAcceptedAnswers)) {
-        throw new HttpError(400, "Les variantes de réponse sont invalides.");
-      }
-      const acceptedAnswers = rawAcceptedAnswers.map((acceptedAnswer) => {
-        if (typeof acceptedAnswer !== "string") {
-          throw new HttpError(400, "Une variante de réponse est invalide.");
-        }
-        return acceptedAnswer.trim();
-      });
+      const acceptedAnswers = acceptedAnswerInput(rawAcceptedAnswers, answer, { maximum: 5 });
       if (
         !answer ||
         answer.length > 300 ||
-        itemPrompt.length > 200 ||
-        acceptedAnswers.length > 5 ||
-        acceptedAnswers.some((acceptedAnswer) => !acceptedAnswer || acceptedAnswer.length > 200)
+        itemPrompt.length > 200
       ) {
         throw new HttpError(400, "Un élément de question est invalide.");
       }
@@ -495,6 +529,7 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
     return {
       ...common,
       expectedAnswer: null,
+      acceptedAnswers: [],
       numericTolerance: null,
       answerUnit: null,
       choices: [],
@@ -530,13 +565,14 @@ function questionInput(body: Record<string, unknown>): QuestionInput {
         : "Un QCM doit contenir entre deux et six réponses.",
     );
   }
-  if (choices.filter((choice) => choice.isCorrect).length !== 1) {
-    throw new HttpError(400, "Une seule proposition doit être marquée comme correcte.");
+  if (choices.every((choice) => !choice.isCorrect)) {
+    throw new HttpError(400, "Au moins une proposition doit être marquée comme correcte.");
   }
 
   return {
     ...common,
     expectedAnswer: null,
+    acceptedAnswers: [],
     numericTolerance: null,
     answerUnit: null,
     choices,
@@ -567,6 +603,7 @@ function questionFromRows(rows: QuestionJoinedRow[]) {
     prompt: first.prompt,
     explanation: first.explanation,
     expectedAnswer: first.expected_answer,
+    acceptedAnswers: acceptedAnswers(first.question_accepted_answers),
     numericTolerance: first.numeric_tolerance,
     answerUnit: first.answer_unit,
     difficulty: first.difficulty,
@@ -624,6 +661,7 @@ async function questionRows(
       q.prompt,
       q.explanation,
       q.expected_answer,
+      q.accepted_answers AS question_accepted_answers,
       q.numeric_tolerance,
       q.answer_unit,
       q.difficulty,
@@ -679,12 +717,13 @@ async function saveQuestion(
             prompt,
             explanation,
             expected_answer,
+            accepted_answers,
             numeric_tolerance,
             answer_unit,
             difficulty,
             xp_reward,
             status
-          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
         ).bind(
           questionId,
           input.themeId,
@@ -693,6 +732,7 @@ async function saveQuestion(
           input.prompt,
           input.explanation,
           input.expectedAnswer,
+          JSON.stringify(input.acceptedAnswers),
           input.numericTolerance,
           input.answerUnit,
           input.difficulty,
@@ -709,13 +749,14 @@ async function saveQuestion(
                prompt = ?4,
                explanation = ?5,
                expected_answer = ?6,
-               numeric_tolerance = ?7,
-               answer_unit = ?8,
-               difficulty = ?9,
-               xp_reward = ?10,
-               status = ?11,
+               accepted_answers = ?7,
+               numeric_tolerance = ?8,
+               answer_unit = ?9,
+               difficulty = ?10,
+               xp_reward = ?11,
+               status = ?12,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?12`,
+           WHERE id = ?13`,
         ).bind(
           input.themeId,
           storageKind,
@@ -723,6 +764,7 @@ async function saveQuestion(
           input.prompt,
           input.explanation,
           input.expectedAnswer,
+          JSON.stringify(input.acceptedAnswers),
           input.numericTolerance,
           input.answerUnit,
           input.difficulty,

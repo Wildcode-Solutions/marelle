@@ -254,6 +254,7 @@ export interface AdminQuestion {
   prompt: string;
   explanation: string;
   expectedAnswer: string | null;
+  acceptedAnswers: string[];
   numericTolerance: number | null;
   answerUnit: string | null;
   difficulty: number;
@@ -269,6 +270,7 @@ export interface AdminQuestionInput {
   prompt: string;
   explanation: string;
   expectedAnswer: string | null;
+  acceptedAnswers: string[];
   numericTolerance: number | null;
   answerUnit: string | null;
   difficulty: number;

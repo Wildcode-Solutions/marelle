@@ -113,22 +113,39 @@ export async function progression(
         q.explanation,
         CASE COALESCE(q.response_kind, q.kind)
           WHEN 'multiple_choice' THEN COALESCE((
-            SELECT ac.label
-            FROM answer_choices ac
-            WHERE ac.question_id = q.id AND ac.is_correct = 1
-            ORDER BY ac.position
-            LIMIT 1
+            SELECT GROUP_CONCAT(correct_choices.label, ' ou ')
+            FROM (
+              SELECT ac.label
+              FROM answer_choices ac
+              WHERE ac.question_id = q.id AND ac.is_correct = 1
+              ORDER BY ac.position
+            ) AS correct_choices
           ), '')
           WHEN 'true_false' THEN COALESCE((
-            SELECT ac.label
-            FROM answer_choices ac
-            WHERE ac.question_id = q.id AND ac.is_correct = 1
-            ORDER BY ac.position
-            LIMIT 1
+            SELECT GROUP_CONCAT(correct_choices.label, ' ou ')
+            FROM (
+              SELECT ac.label
+              FROM answer_choices ac
+              WHERE ac.question_id = q.id AND ac.is_correct = 1
+              ORDER BY ac.position
+            ) AS correct_choices
           ), '')
-          WHEN 'short_answer' THEN COALESCE(q.expected_answer, '')
+          WHEN 'short_answer' THEN COALESCE(q.expected_answer, '') || COALESCE((
+            SELECT ' ou ' || GROUP_CONCAT(accepted.value, ' ou ')
+            FROM json_each(q.accepted_answers) AS accepted
+            WHERE typeof(accepted.value) = 'text'
+          ), '')
           WHEN 'numeric' THEN COALESCE(q.expected_answer, '') ||
-            CASE WHEN q.answer_unit IS NULL OR q.answer_unit = '' THEN '' ELSE ' ' || q.answer_unit END
+            CASE WHEN q.answer_unit IS NULL OR q.answer_unit = '' THEN '' ELSE ' ' || q.answer_unit END ||
+            COALESCE((
+              SELECT ' ou ' || GROUP_CONCAT(
+                CAST(accepted.value AS TEXT) ||
+                  CASE WHEN q.answer_unit IS NULL OR q.answer_unit = '' THEN '' ELSE ' ' || q.answer_unit END,
+                ' ou '
+              )
+              FROM json_each(q.accepted_answers) AS accepted
+              WHERE typeof(accepted.value) IN ('text', 'integer', 'real')
+            ), '')
           WHEN 'ordering' THEN COALESCE((
             SELECT GROUP_CONCAT(ordered_items.item_answer, ' → ')
             FROM (
@@ -148,9 +165,13 @@ export async function progression(
             ) AS matching_items
           ), '')
           ELSE COALESCE((
-            SELECT GROUP_CONCAT(blank_items.item_answer, ' · ')
+            SELECT GROUP_CONCAT(blank_items.answer, ' · ')
             FROM (
-              SELECT qi.item_answer
+              SELECT qi.item_answer || COALESCE((
+                SELECT ' ou ' || GROUP_CONCAT(accepted.value, ' ou ')
+                FROM json_each(qi.accepted_answers) AS accepted
+                WHERE typeof(accepted.value) = 'text'
+              ), '') AS answer
               FROM question_items qi
               WHERE qi.question_id = q.id
               ORDER BY qi.position

@@ -74,7 +74,14 @@ export async function adminOverview(request: Request, env: Env): Promise<Respons
     env.DB.prepare(
       `SELECT
         (SELECT COUNT(*) FROM answer_choices) +
-        (SELECT COUNT(*) FROM questions WHERE expected_answer IS NOT NULL) AS count`,
+        (SELECT COUNT(*) FROM questions WHERE expected_answer IS NOT NULL) +
+        (SELECT COALESCE(SUM(
+          CASE WHEN json_valid(accepted_answers) THEN json_array_length(accepted_answers) ELSE 0 END
+        ), 0) FROM questions) +
+        (SELECT COUNT(*) FROM question_items) +
+        (SELECT COALESCE(SUM(
+          CASE WHEN json_valid(accepted_answers) THEN json_array_length(accepted_answers) ELSE 0 END
+        ), 0) FROM question_items) AS count`,
     ),
     env.DB.prepare(
       `SELECT

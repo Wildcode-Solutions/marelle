@@ -24,6 +24,7 @@ export interface AnswerSubmission {
 
 interface QuestionRow {
   answer_unit: string | null;
+  accepted_answers: string;
   expected_answer: string | null;
   explanation: string;
   kind: QuestionKind;
@@ -105,6 +106,7 @@ async function questionDetails(env: Env, questionId: string): Promise<{
       COALESCE(response_kind, kind) AS kind,
       explanation,
       expected_answer,
+      accepted_answers,
       numeric_tolerance,
       answer_unit
      FROM questions
@@ -163,9 +165,12 @@ export async function evaluateAnswer(
     if (!selectedChoice) {
       throw new HttpError(400, "La réponse choisie n’appartient pas à cette question.");
     }
-    const correctChoice = choices.find((choice) => choice.is_correct === 1);
-    if (!correctChoice) throw new Error(`Question ${questionId} has no correct choice`);
-    return result(selectedChoice.is_correct === 1, correctChoice.label);
+    const correctChoices = choices.filter((choice) => choice.is_correct === 1);
+    if (!correctChoices.length) throw new Error(`Question ${questionId} has no correct choice`);
+    return result(
+      selectedChoice.is_correct === 1,
+      correctChoices.map((choice) => choice.label).join(" ou "),
+    );
   }
 
   if (question.kind === "short_answer") {
@@ -177,9 +182,12 @@ export async function evaluateAnswer(
     if (!question.expected_answer || submission.answerText === null) {
       throw new Error(`Question ${questionId} has no expected answer`);
     }
+    const validAnswers = [question.expected_answer, ...acceptedAnswers(question.accepted_answers)];
     return result(
-      normalizeAnswer(submission.answerText) === normalizeAnswer(question.expected_answer),
-      question.expected_answer,
+      validAnswers.some(
+        (answer) => normalizeAnswer(submission.answerText!) === normalizeAnswer(answer),
+      ),
+      validAnswers.join(" ou "),
     );
   }
 
@@ -192,12 +200,19 @@ export async function evaluateAnswer(
     if (!question.expected_answer || submission.answerText === null) {
       throw new Error(`Question ${questionId} has no numeric answer`);
     }
-    const expected = numericValue(question.expected_answer, question.answer_unit);
+    const validAnswers = [question.expected_answer, ...acceptedAnswers(question.accepted_answers)];
+    const expectedValues = validAnswers.map((answer) => numericValue(answer, question.answer_unit));
     const submitted = numericValue(submission.answerText, question.answer_unit);
-    if (expected === null) throw new Error(`Question ${questionId} has an invalid numeric answer`);
+    if (expectedValues.some((answer) => answer === null)) {
+      throw new Error(`Question ${questionId} has an invalid numeric answer`);
+    }
     return result(
-      submitted !== null && Math.abs(submitted - expected) <= (question.numeric_tolerance ?? 0),
-      `${question.expected_answer}${question.answer_unit ? ` ${question.answer_unit}` : ""}`,
+      submitted !== null && expectedValues.some(
+        (answer) => Math.abs(submitted - answer!) <= (question.numeric_tolerance ?? 0),
+      ),
+      validAnswers
+        .map((answer) => `${answer}${question.answer_unit ? ` ${question.answer_unit}` : ""}`)
+        .join(" ou "),
     );
   }
 
@@ -217,7 +232,12 @@ export async function evaluateAnswer(
       const accepted = [item.item_answer, ...acceptedAnswers(item.accepted_answers)].map(normalizeAnswer);
       return accepted.includes(normalizeAnswer(submission.blankAnswers![index] ?? ""));
     });
-    return result(isCorrect, items.map((item) => item.item_answer).join(" · "));
+    return result(
+      isCorrect,
+      items
+        .map((item) => [item.item_answer, ...acceptedAnswers(item.accepted_answers)].join(" ou "))
+        .join(" · "),
+    );
   }
 
   if (question.kind === "ordering") {
